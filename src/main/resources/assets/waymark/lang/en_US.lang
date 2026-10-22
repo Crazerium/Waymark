@@ -134,3 +134,7 @@ waymark.field.fluid=Fluid
 waymark.edit.fluid_from_container=Take the fluid from a container in your inventory
 waymark.gui.team_reward=Team reward: one claim for the whole team
 waymark.field.team_reward=Team reward
+waymark.gui.recipe_keys=R: recipes | U: uses
+waymark.edit.picker_inventory=Inventory
+waymark.edit.picker_search=All items
+waymark.edit.picker_none=Nothing found

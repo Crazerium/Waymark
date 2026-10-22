@@ -134,3 +134,7 @@ waymark.field.fluid=Жидкость
 waymark.edit.fluid_from_container=Взять жидкость из контейнера в инвентаре
 waymark.gui.team_reward=Командная награда: забирается одна на всю команду
 waymark.field.team_reward=Командная награда
+waymark.gui.recipe_keys=R: рецепты | U: применение
+waymark.edit.picker_inventory=Инвентарь
+waymark.edit.picker_search=Все предметы
+waymark.edit.picker_none=Ничего не найдено

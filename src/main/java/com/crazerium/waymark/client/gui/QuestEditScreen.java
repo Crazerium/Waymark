@@ -424,6 +424,10 @@ public class QuestEditScreen extends GuiScreen {
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
+        if (wheel != 0 && picker != null) {
+            picker.scroll(wheel > 0 ? -1 : 1);
+            return;
+        }
         if (wheel == 0 || picker != null || menu != null) return;
         int mx = Mouse.getEventX() * width / mc.displayWidth;
         int my = height - Mouse.getEventY() * height / mc.displayHeight - 1;
@@ -443,6 +447,11 @@ public class QuestEditScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (picker != null) {
+            // The picker has its own search box; it closes itself on Esc.
+            if (picker.keyTyped(c, key)) picker = null;
+            return;
+        }
         if (key == Keyboard.KEY_ESCAPE) {
             if (picker != null) picker = null;
             else if (menu != null) menu = null;

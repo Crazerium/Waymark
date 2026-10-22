@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 import com.crazerium.waymark.client.ClientEvents;
 import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.client.QuestState;
+import com.crazerium.waymark.client.compat.Recipes;
 import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.Chapter;
 import com.crazerium.waymark.quest.Quest;
@@ -82,6 +83,8 @@ public class QuestBookScreen extends GuiScreen {
 
     private List<String> tooltip;
     private ItemStack tooltipStack;
+    /** The item under the mouse this frame (a task, reward or quest icon), for the R/U recipe keys. */
+    private ItemStack hoveredStack;
     private int tooltipX, tooltipY;
 
     private int listX, listY, listH, canvasX, canvasY, canvasW, canvasH;
@@ -111,6 +114,15 @@ public class QuestBookScreen extends GuiScreen {
         tooltip = lines;
         tooltipX = x;
         tooltipY = y;
+    }
+
+    void setHoveredStack(ItemStack stack) {
+        hoveredStack = stack;
+    }
+
+    /** A tooltip line about the R/U keys, or null when no recipe viewer is installed. */
+    static String recipeHint() {
+        return Recipes.available() ? "§8" + I18n.format("waymark.gui.recipe_keys") : null;
     }
 
     void showItemTooltip(ItemStack stack, int x, int y) {
@@ -302,6 +314,7 @@ public class QuestBookScreen extends GuiScreen {
     public void drawScreen(int mx, int my, float partialTicks) {
         tooltip = null;
         tooltipStack = null;
+        hoveredStack = null;
         drawDefaultBackground();
         fontRendererObj.drawStringWithShadow(I18n.format("waymark.gui.title"), MARGIN, MARGIN + 4, 0xFFFFFF);
 
@@ -522,6 +535,7 @@ public class QuestBookScreen extends GuiScreen {
 
         if (hovered != null) {
             List<String> lines = questTooltip(hovered);
+            setHoveredStack(hovered.getIcon());
             if (hoveredNode.link) lines.add(
                 "§b" + I18n.format(
                     "waymark.gui.linked_from",
@@ -796,6 +810,10 @@ public class QuestBookScreen extends GuiScreen {
         }
         if (key == Keyboard.KEY_ESCAPE && questView != null) {
             closeQuest();
+            return;
+        }
+        if ((key == Keyboard.KEY_R || key == Keyboard.KEY_U) && hoveredStack != null) {
+            Recipes.show(hoveredStack, key == Keyboard.KEY_U);
             return;
         }
         if (questView != null && isEditing() && questView.shortcut(key)) return;

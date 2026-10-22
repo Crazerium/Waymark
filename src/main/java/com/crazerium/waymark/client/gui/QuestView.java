@@ -230,6 +230,9 @@ class QuestView {
                 if (task.getMaxProgress() > 1) lines.add("§7" + value + " / " + task.getMaxProgress());
                 if (done) lines.add("§a" + I18n.format("waymark.gui.completed"));
                 else if (submittable) lines.add("§e" + I18n.format("waymark.gui.click_submit"));
+                String hint = QuestBookScreen.recipeHint();
+                if (hint != null && icon != null) lines.add(hint);
+                screen.setHoveredStack(icon);
                 if (editing) lines.add("§8" + I18n.format("waymark.edit.right_click_edit"));
                 screen.showTooltip(lines, mx, my);
             }
@@ -282,6 +285,9 @@ class QuestView {
                 if (reward.isTeamReward()) lines.add("§d" + I18n.format("waymark.gui.team_reward"));
                 if (claimed) lines.add("§a" + I18n.format("waymark.gui.claimed"));
                 else if (claimable) lines.add("§e" + I18n.format("waymark.gui.click_claim"));
+                String hint = QuestBookScreen.recipeHint();
+                if (hint != null && icon != null) lines.add(hint);
+                screen.setHoveredStack(icon);
                 if (editing) lines.add("§8" + I18n.format("waymark.edit.right_click_edit"));
                 screen.showTooltip(lines, mx, my);
             }

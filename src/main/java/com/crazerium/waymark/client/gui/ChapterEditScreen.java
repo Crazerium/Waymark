@@ -143,11 +143,20 @@ public class ChapterEditScreen extends GuiScreen {
     public void handleMouseInput() {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
+        if (wheel != 0 && picker != null) {
+            picker.scroll(wheel > 0 ? -1 : 1);
+            return;
+        }
         if (wheel != 0 && picker == null) description.scroll(wheel > 0 ? -1 : 1);
     }
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (picker != null) {
+            // The picker has its own search box; it closes itself on Esc.
+            if (picker.keyTyped(c, key)) picker = null;
+            return;
+        }
         if (key == Keyboard.KEY_ESCAPE) {
             if (picker != null) picker = null;
             else mc.displayGuiScreen(parent);
