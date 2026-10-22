@@ -39,6 +39,9 @@ public class Quest extends QuestObject {
     private Visibility visibility = Visibility.ALWAYS;
     private boolean optional;
     private boolean autoClaim;
+    private boolean repeatable;
+    /** Seconds after completion before a repeatable quest can be done again. */
+    private long repeatCooldown;
 
     Quest(Chapter chapter, long id) {
         super(id);
@@ -162,6 +165,26 @@ public class Quest extends QuestObject {
         this.autoClaim = autoClaim;
     }
 
+    /**
+     * A repeatable quest resets once its cooldown has passed since completion and the player has claimed its
+     * rewards. For dependencies it counts as done after the first completion.
+     */
+    public boolean isRepeatable() {
+        return repeatable;
+    }
+
+    public void setRepeatable(boolean repeatable) {
+        this.repeatable = repeatable;
+    }
+
+    public long getRepeatCooldown() {
+        return repeatCooldown;
+    }
+
+    public void setRepeatCooldown(long seconds) {
+        this.repeatCooldown = Math.max(0, seconds);
+    }
+
     /** Ids of quests this one depends on. Ids that point at deleted quests are kept and simply ignored. */
     public List<Long> getDependencyIds() {
         return Collections.unmodifiableList(dependencies);
@@ -253,6 +276,8 @@ public class Quest extends QuestObject {
         if (visibility != Visibility.ALWAYS) json.addProperty("visibility", visibility.key());
         if (optional) json.addProperty("optional", true);
         if (autoClaim) json.addProperty("auto_claim", true);
+        if (repeatable) json.addProperty("repeatable", true);
+        if (repeatCooldown > 0) json.addProperty("repeat_cooldown", repeatCooldown);
 
         JsonArray taskArray = new JsonArray();
         for (Task task : tasks) {
@@ -328,6 +353,8 @@ public class Quest extends QuestObject {
         visibility = Visibility.fromKey(JsonUtil.getString(json, "visibility", "always"));
         optional = JsonUtil.getBoolean(json, "optional", false);
         autoClaim = JsonUtil.getBoolean(json, "auto_claim", false);
+        repeatable = JsonUtil.getBoolean(json, "repeatable", false);
+        repeatCooldown = Math.max(0, JsonUtil.getLong(json, "repeat_cooldown", 0));
 
         for (JsonElement e : JsonUtil.getArray(json, "tasks")) {
             if (!e.isJsonObject()) continue;

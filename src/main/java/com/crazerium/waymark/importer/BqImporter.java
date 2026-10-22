@@ -222,10 +222,12 @@ public class BqImporter {
         String visibility = visibility(str(props, "visibility:8", "NORMAL"));
         if (!visibility.equals("always")) quest.addProperty("visibility", visibility);
         if (num(props, "autoClaim:1", 0) == 1) quest.addProperty("auto_claim", true);
-        if (num(props, "repeatTime:3", -1) >= 0) {
-            result.warnings
-                .add("'" + plain(title) + "' is repeatable in BetterQuesting; Waymark imports it as a normal quest");
-            result.count("repeatable quest (not supported yet)");
+        int repeatTicks = num(props, "repeatTime:3", -1);
+        if (repeatTicks >= 0) {
+            // BetterQuesting counts the cooldown in ticks, Waymark in seconds.
+            quest.addProperty("repeatable", true);
+            if (repeatTicks >= 20) quest.addProperty("repeat_cooldown", repeatTicks / 20);
+            result.count("repeatable quest");
         }
 
         JsonArray tasks = new JsonArray();

@@ -103,6 +103,12 @@ class QuestView {
             cy += 2;
         }
 
+        String repeat = QuestState.repeatInfo(quest);
+        if (repeat != null) {
+            font.drawString("§b" + repeat, left, cy, 0xFFFFFF);
+            cy += 12;
+        }
+
         if (progress != null && !progress.isUnlocked(quest)) {
             StringBuilder deps = new StringBuilder();
             for (Quest dep : quest.getDependencies()) {

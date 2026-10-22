@@ -21,6 +21,7 @@ import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.RewardType;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.TaskType;
+import com.crazerium.waymark.util.Durations;
 import com.crazerium.waymark.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -52,7 +53,9 @@ public class QuestEditScreen extends GuiScreen {
     private List<String> descriptionLines;
     private JsonObject icon;
     private String dependencyMode, taskMode, visibility;
-    private boolean autoClaim, optional;
+    private boolean autoClaim, optional, repeatable;
+    private GuiTextField cooldown;
+    private String cooldownText;
     private double size;
     private final List<JsonObject> tasks = new ArrayList<>();
     private final List<JsonObject> rewards = new ArrayList<>();
@@ -77,6 +80,8 @@ public class QuestEditScreen extends GuiScreen {
         taskMode = JsonUtil.getString(base, "task_mode", "all");
         visibility = JsonUtil.getString(base, "visibility", "always");
         autoClaim = JsonUtil.getBoolean(base, "auto_claim", false);
+        repeatable = JsonUtil.getBoolean(base, "repeatable", false);
+        cooldownText = Durations.format(JsonUtil.getLong(base, "repeat_cooldown", 0));
         optional = JsonUtil.getBoolean(base, "optional", false);
         size = JsonUtil.getDouble(base, "size", 1.0);
         for (JsonElement e : JsonUtil.getArray(base, "tasks")) if (e.isJsonObject()) tasks.add(e.getAsJsonObject());
@@ -89,6 +94,7 @@ public class QuestEditScreen extends GuiScreen {
         if (title != null) {
             titleText = title.getText();
             subtitleText = subtitle.getText();
+            cooldownText = cooldown.getText();
             descriptionLines = description.getLines();
         }
         pw = Math.min(460, width - 20);
@@ -102,9 +108,13 @@ public class QuestEditScreen extends GuiScreen {
         subtitle = new GuiTextField(fontRendererObj, fx, py + 40, fw, 14);
         subtitle.setMaxStringLength(500);
         subtitle.setText(subtitleText);
-        int lines = Math.max(3, Math.min(8, (ph - 230) / 14));
-        description = new TextArea(fontRendererObj, fx, py + 104, fw - 6, lines, descriptionLines);
-        listTop = py + 104 + description.height() + 22;
+        int slotW = (pw - 100) / 3 - 2;
+        cooldown = new GuiTextField(fontRendererObj, px + 92 + 2 * (slotW + 2), py + 90, slotW, 14);
+        cooldown.setMaxStringLength(20);
+        cooldown.setText(cooldownText);
+        int lines = Math.max(3, Math.min(8, (ph - 246) / 14));
+        description = new TextArea(fontRendererObj, fx, py + 120, fw - 6, lines, descriptionLines);
+        listTop = py + 120 + description.height() + 22;
         listBottom = py + ph - 28;
     }
 
@@ -117,6 +127,7 @@ public class QuestEditScreen extends GuiScreen {
     public void updateScreen() {
         title.updateCursorCounter();
         subtitle.updateCursorCounter();
+        cooldown.updateCursorCounter();
         description.tick();
     }
 
@@ -148,7 +159,14 @@ public class QuestEditScreen extends GuiScreen {
             GuiUtil.button(fontRendererObj, o.x(bx), o.y(py), o.w, 14, o.text(), hx, hy);
         }
 
-        label("description", py + 107);
+        cooldown.drawTextBox();
+        fontRendererObj.drawString(
+            I18n.format("waymark.edit.cooldown"),
+            px + 92 + (pw - 100) / 3 + 4,
+            py + 93,
+            repeatable ? 0xC0C0C0 : 0x606060);
+
+        label("description", py + 123);
         description.draw();
 
         int colW = (pw - 24) / 2;
@@ -316,6 +334,12 @@ public class QuestEditScreen extends GuiScreen {
                     () -> I18n.format("waymark.edit.optional", yesNo(optional)),
                     () -> optional = !optional),
                 new Option(
+                    2,
+                    0,
+                    w,
+                    () -> I18n.format("waymark.edit.repeatable", yesNo(repeatable)),
+                    () -> repeatable = !repeatable),
+                new Option(
                     1,
                     2 * (w + 2),
                     w,
@@ -347,6 +371,7 @@ public class QuestEditScreen extends GuiScreen {
         error = null;
         title.mouseClicked(mx, my, button);
         subtitle.mouseClicked(mx, my, button);
+        cooldown.mouseClicked(mx, my, button);
         description.mouseClicked(mx, my, button);
 
         if (GuiUtil.inside(mx, my, px + 70, py + 59, 17, 17)) {
@@ -432,7 +457,7 @@ public class QuestEditScreen extends GuiScreen {
         if (my >= listTop && my < listBottom) {
             if (mx < px + 8 + colW) taskScroll = clampScroll(taskScroll + step, tasks.size());
             else rewardScroll = clampScroll(rewardScroll + step, rewards.size());
-        } else if (GuiUtil.inside(mx, my, px, py + 104, pw, description.height())) {
+        } else if (GuiUtil.inside(mx, my, px, py + 120, pw, description.height())) {
             description.scroll(wheel > 0 ? -1 : 1);
         }
     }
@@ -452,6 +477,7 @@ public class QuestEditScreen extends GuiScreen {
         if (description.keyTyped(c, key)) return;
         title.textboxKeyTyped(c, key);
         subtitle.textboxKeyTyped(c, key);
+        cooldown.textboxKeyTyped(c, key);
     }
 
     private void save() {
@@ -471,6 +497,17 @@ public class QuestEditScreen extends GuiScreen {
         if (autoClaim) data.addProperty("auto_claim", true);
         data.remove("optional");
         if (optional) data.addProperty("optional", true);
+        data.remove("repeatable");
+        data.remove("repeat_cooldown");
+        if (repeatable) {
+            long seconds = Durations.parse(cooldown.getText());
+            if (seconds < 0) {
+                error = I18n.format("waymark.edit.bad_cooldown");
+                return;
+            }
+            data.addProperty("repeatable", true);
+            if (seconds > 0) data.addProperty("repeat_cooldown", seconds);
+        }
         data.remove("size");
         if (size != 1.0) data.addProperty("size", size);
         JsonArray taskArray = new JsonArray();

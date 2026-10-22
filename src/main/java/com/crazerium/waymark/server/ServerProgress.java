@@ -21,6 +21,7 @@ import com.crazerium.waymark.io.ProgressStorage;
 import com.crazerium.waymark.network.MessageBlob;
 import com.crazerium.waymark.network.MessageCanEdit;
 import com.crazerium.waymark.network.MessageQuestCompleted;
+import com.crazerium.waymark.network.MessageQuestReset;
 import com.crazerium.waymark.network.MessageRewardClaimed;
 import com.crazerium.waymark.network.MessageTaskProgress;
 import com.crazerium.waymark.network.WaymarkNetwork;
@@ -44,6 +45,7 @@ public final class ServerProgress {
     private static final List<Task> autoDetectedTasks = new ArrayList<>();
     private static final List<CraftTask> craftTasks = new ArrayList<>();
     private static final List<KillTask> killTasks = new ArrayList<>();
+    private static final List<Quest> repeatableQuests = new ArrayList<>();
 
     private ServerProgress() {}
 
@@ -66,8 +68,10 @@ public final class ServerProgress {
     public static void onBookLoaded(QuestBook book) {
         autoDetectedTasks.clear();
         craftTasks.clear();
+        repeatableQuests.clear();
         killTasks.clear();
         for (Quest quest : book.getAllQuests()) {
+            if (quest.isRepeatable()) repeatableQuests.add(quest);
             for (Task task : quest.getTasks()) {
                 if (task.isAutoDetected()) autoDetectedTasks.add(task);
                 if (task instanceof CraftTask) craftTasks.add((CraftTask) task);
@@ -121,9 +125,30 @@ public final class ServerProgress {
 
     public static void detect(EntityPlayerMP player) {
         TeamProgress team = get(player);
+        checkRepeats(team, player);
         for (Task task : autoDetectedTasks) {
             if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
             setProgress(team, task, task.detect(player, team.getProgress(task)));
+        }
+    }
+
+    /**
+     * Resets repeatable quests whose cooldown has passed, once this player has claimed their rewards (otherwise the
+     * reset would take the rewards away).
+     */
+    private static void checkRepeats(TeamProgress team, EntityPlayerMP player) {
+        long now = System.currentTimeMillis();
+        for (Quest quest : repeatableQuests) {
+            long completedAt = team.getCompletedTime(quest);
+            if (completedAt < 0 || now - completedAt < quest.getRepeatCooldown() * 1000) continue;
+            boolean claimedAll = true;
+            for (Reward reward : quest.getRewards()) {
+                if (!team.isClaimed(player.getUniqueID(), reward)) claimedAll = false;
+            }
+            if (!claimedAll) continue;
+            team.resetQuest(quest);
+            sendToTeam(team, new MessageQuestReset(quest.getId()));
+            checkQuest(team, quest);
         }
     }
 

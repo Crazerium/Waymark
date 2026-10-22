@@ -28,6 +28,8 @@ public class TeamProgress {
     /** Quest id to completion time (epoch millis). */
     private final Map<Long, Long> completed = new HashMap<>();
     private final Map<UUID, Set<Long>> claimed = new HashMap<>();
+    /** How many times each quest was completed; repeatable quests count up, others stay at 1. */
+    private final Map<Long, Integer> times = new HashMap<>();
     private boolean dirty;
 
     public TeamProgress(UUID id) {
@@ -59,6 +61,31 @@ public class TeamProgress {
 
     public void setCompleted(long questId, long time) {
         completed.put(questId, time);
+        times.merge(questId, 1, Integer::sum);
+        dirty = true;
+    }
+
+    /** When the quest was completed (epoch millis), or -1 if it is not completed right now. */
+    public long getCompletedTime(Quest quest) {
+        Long time = completed.get(quest.getId());
+        return time == null ? -1 : time;
+    }
+
+    public int getTimesCompleted(Quest quest) {
+        Integer n = times.get(quest.getId());
+        return n == null ? 0 : n;
+    }
+
+    /** Completed now, or at least once before a repeatable quest was reset. This is what dependencies check. */
+    public boolean hasEverCompleted(Quest quest) {
+        return isCompleted(quest) || getTimesCompleted(quest) > 0;
+    }
+
+    /** Makes a repeatable quest doable again: clears its completion, task progress and every member's claims. */
+    public void resetQuest(Quest quest) {
+        completed.remove(quest.getId());
+        for (Task task : quest.getTasks()) taskProgress.remove(task.getId());
+        for (Set<Long> set : claimed.values()) for (Reward reward : quest.getRewards()) set.remove(reward.getId());
         dirty = true;
     }
 
@@ -71,7 +98,7 @@ public class TeamProgress {
         List<Quest> deps = quest.getDependencies();
         if (deps.isEmpty()) return true;
         int met = 0;
-        for (Quest dep : deps) if (isCompleted(dep)) met++;
+        for (Quest dep : deps) if (hasEverCompleted(dep)) met++;
         return quest.getDependencyMode()
             .test(met, deps.size());
     }
@@ -113,6 +140,7 @@ public class TeamProgress {
         taskProgress.clear();
         completed.clear();
         claimed.clear();
+        times.clear();
         dirty = true;
     }
 
@@ -132,6 +160,9 @@ public class TeamProgress {
         JsonObject quests = new JsonObject();
         for (Map.Entry<Long, Long> e : completed.entrySet()) quests.addProperty(Ids.format(e.getKey()), e.getValue());
         json.add("completed", quests);
+        JsonObject counts = new JsonObject();
+        for (Map.Entry<Long, Integer> e : times.entrySet()) counts.addProperty(Ids.format(e.getKey()), e.getValue());
+        json.add("times", counts);
         JsonObject rewards = new JsonObject();
         for (Map.Entry<UUID, Set<Long>> e : claimed.entrySet()) {
             JsonArray array = new JsonArray();
@@ -149,8 +180,15 @@ public class TeamProgress {
         taskProgress.clear();
         completed.clear();
         claimed.clear();
+        times.clear();
         readLongMap(json.get("tasks"), taskProgress);
         readLongMap(json.get("completed"), completed);
+        Map<Long, Long> counts = new HashMap<>();
+        readLongMap(json.get("times"), counts);
+        for (Map.Entry<Long, Long> e : counts.entrySet()) times.put(
+            e.getKey(),
+            e.getValue()
+                .intValue());
         JsonElement rewards = json.get("claimed");
         if (rewards != null && rewards.isJsonObject()) {
             for (Map.Entry<String, JsonElement> e : rewards.getAsJsonObject()

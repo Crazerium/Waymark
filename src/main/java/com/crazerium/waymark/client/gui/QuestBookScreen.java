@@ -517,6 +517,8 @@ public class QuestBookScreen extends GuiScreen {
         lines.add(GuiUtil.colorCodes(q.getDisplayTitle()));
         if (!q.getSubtitle()
             .isEmpty()) lines.add("§7" + GuiUtil.colorCodes(q.getSubtitle()));
+        String repeat = QuestState.repeatInfo(q);
+        if (repeat != null) lines.add("§b" + repeat);
         switch (QuestState.of(q)) {
             case LOCKED:
                 lines.add("§8" + I18n.format("waymark.gui.locked"));

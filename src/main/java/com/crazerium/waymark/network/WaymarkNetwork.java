@@ -18,6 +18,7 @@ public final class WaymarkNetwork {
         CHANNEL.registerMessage(MessageBlob.Handler.class, MessageBlob.class, id++, Side.CLIENT);
         CHANNEL.registerMessage(MessageTaskProgress.Handler.class, MessageTaskProgress.class, id++, Side.CLIENT);
         CHANNEL.registerMessage(MessageQuestCompleted.Handler.class, MessageQuestCompleted.class, id++, Side.CLIENT);
+        CHANNEL.registerMessage(MessageQuestReset.Handler.class, MessageQuestReset.class, id++, Side.CLIENT);
         CHANNEL.registerMessage(MessageRewardClaimed.Handler.class, MessageRewardClaimed.class, id++, Side.CLIENT);
         CHANNEL.registerMessage(MessageEditApply.Handler.class, MessageEditApply.class, id++, Side.CLIENT);
         CHANNEL.registerMessage(MessageCanEdit.Handler.class, MessageCanEdit.class, id++, Side.CLIENT);

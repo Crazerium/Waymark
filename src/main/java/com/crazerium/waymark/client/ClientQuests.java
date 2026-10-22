@@ -11,6 +11,7 @@ import com.crazerium.waymark.network.MessageSubmitTask;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.progress.TeamProgress;
 import com.crazerium.waymark.quest.BookEdits;
+import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
@@ -81,6 +82,12 @@ public final class ClientQuests {
 
     public static void onQuestCompleted(long questId, long time) {
         if (progress != null) progress.setCompleted(questId, time);
+    }
+
+    public static void onQuestReset(long questId) {
+        if (book == null || progress == null) return;
+        Quest quest = book.getQuest(questId);
+        if (quest != null) progress.resetQuest(quest);
     }
 
     public static void onRewardClaimed(long rewardId) {
