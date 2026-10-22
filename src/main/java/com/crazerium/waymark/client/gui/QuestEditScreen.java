@@ -63,6 +63,7 @@ public class QuestEditScreen extends GuiScreen {
     private ItemPicker picker;
     private ContextMenu menu;
     private ItemStack tooltipStack;
+    private boolean autoIconHint;
     private String error;
 
     private int px, py, pw, ph, listTop, listBottom;
@@ -140,6 +141,7 @@ public class QuestEditScreen extends GuiScreen {
     @Override
     public void drawScreen(int mx, int my, float partialTicks) {
         tooltipStack = null;
+        autoIconHint = false;
         boolean blocked = picker != null || menu != null;
         int hx = blocked ? -1 : mx, hy = blocked ? -1 : my;
         drawDefaultBackground();
@@ -153,6 +155,7 @@ public class QuestEditScreen extends GuiScreen {
 
         label("icon", py + 64);
         drawSlot(icon, px + 70, py + 59, hx, hy);
+        if (icon == null) drawAutoIcon(px + 70, py + 59, hx, hy);
         int bx = px + 92;
         for (Option o : options()) {
             GuiUtil.button(fontRendererObj, o.x(bx), o.y(py), o.w, 14, o.text(), hx, hy);
@@ -184,10 +187,34 @@ public class QuestEditScreen extends GuiScreen {
         if (menu != null) menu.draw(fontRendererObj, mx, my);
         super.drawScreen(mx, my, partialTicks);
         if (tooltipStack != null) renderToolTip(tooltipStack, mx, my);
+        else if (autoIconHint) drawHoveringText(
+            java.util.Collections.singletonList(I18n.format("waymark.edit.auto_icon")),
+            mx,
+            my,
+            fontRendererObj);
     }
 
     private void label(String key, int y) {
         fontRendererObj.drawString(ObjectEditScreen.label(key), px + 8, y, 0xC0C0C0);
+    }
+
+    /**
+     * With no icon chosen the quest shows its first task's icon. Draw that one dimmed, so it is clear there is an
+     * icon and where it comes from; picking an item replaces it.
+     */
+    private void drawAutoIcon(int x, int y, int mx, int my) {
+        ItemStack auto = null;
+        for (JsonObject task : tasks) {
+            auto = icon(preview(task, true));
+            if (auto != null) break;
+        }
+        if (auto == null) return;
+        GuiUtil.item(auto, x, y);
+        GuiUtil.rect(x + 1, y + 1, 15, 15, 0x90101018);
+        if (GuiUtil.inside(mx, my, x, y, 17, 17)) {
+            tooltipStack = null;
+            autoIconHint = true;
+        }
     }
 
     private void drawSlot(JsonObject json, int x, int y, int mx, int my) {

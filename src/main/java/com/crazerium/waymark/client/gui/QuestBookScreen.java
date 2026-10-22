@@ -19,6 +19,7 @@ import org.lwjgl.opengl.GL11;
 
 import com.crazerium.waymark.client.ClientEvents;
 import com.crazerium.waymark.client.ClientQuests;
+import com.crazerium.waymark.client.ClientSettings;
 import com.crazerium.waymark.client.QuestState;
 import com.crazerium.waymark.client.compat.Recipes;
 import com.crazerium.waymark.progress.TeamProgress;
@@ -43,7 +44,9 @@ public class QuestBookScreen extends GuiScreen {
 
     private static final int MARGIN = 8;
     private static final int HEADER = 18;
-    private static final int LIST_WIDTH = 110;
+    private static final int LIST_FULL = 110;
+    /** Width of the folded chapter list: just the chapter icons. */
+    private static final int LIST_COLLAPSED = 24;
     private static final int ROW = 20;
     /** Screen pixels per quest position unit at zoom 1. */
     private static final int GRID = 28;
@@ -93,13 +96,19 @@ public class QuestBookScreen extends GuiScreen {
     private int tooltipX, tooltipY;
 
     private int listX, listY, listH, canvasX, canvasY, canvasW, canvasH;
+    /** Current width of the chapter list; it animates between folded and open when not pinned. */
+    private int listW = LIST_COLLAPSED;
+    private int pinX;
 
     @Override
     public void initGui() {
         listX = MARGIN;
         listY = MARGIN + HEADER;
         listH = height - listY - MARGIN;
-        canvasX = listX + LIST_WIDTH + 4;
+        boolean pinned = ClientSettings.isChapterListPinned();
+        // A pinned list takes its own column; an unpinned one only keeps its folded strip and opens over the map.
+        canvasX = listX + (pinned ? LIST_FULL : LIST_COLLAPSED) + 4;
+        if (pinned) listW = LIST_FULL;
         canvasY = listY;
         canvasW = width - canvasX - MARGIN;
         canvasH = listH;
@@ -322,6 +331,7 @@ public class QuestBookScreen extends GuiScreen {
         hoveredStack = null;
         drawDefaultBackground();
         fontRendererObj.drawStringWithShadow(I18n.format("waymark.gui.title"), MARGIN, MARGIN + 4, 0xFFFFFF);
+        pinX = MARGIN + fontRendererObj.getStringWidth(I18n.format("waymark.gui.title")) + 6;
 
         QuestBook book = ClientQuests.getBook();
         if (book == null || ClientQuests.getProgress() == null) {
@@ -338,8 +348,18 @@ public class QuestBookScreen extends GuiScreen {
         int hx = blocked ? -1 : mx;
         int hy = blocked ? -1 : my;
         drawHeader(book, hx, hy);
-        drawChapterList(book, hx, hy);
-        drawCanvas(hx, hy);
+        updateListWidth(hx, hy);
+        if (ClientSettings.isChapterListPinned()) {
+            drawChapterList(book, hx, hy);
+            drawCanvas(hx, hy);
+        } else {
+            // The open list covers part of the map, so the map must not react to the mouse under it.
+            boolean overList = GuiUtil.inside(hx, hy, listX, listY, listW, listH);
+            drawCanvas(overList ? -1 : hx, hy);
+            GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
+            drawChapterList(book, hx, hy);
+        }
+        drawPinButton(hx, hy);
 
         if (questView != null) {
             GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
@@ -395,6 +415,8 @@ public class QuestBookScreen extends GuiScreen {
     }
 
     private void drawHeader(QuestBook book, int mx, int my) {
+        // Text starts after the title and pin, which a folded chapter list no longer pushes aside.
+        int textX = Math.max(canvasX, pinX + 18);
         int right = width - MARGIN;
         editButtonW = 0;
         if (ClientQuests.canEdit()) {
@@ -416,31 +438,65 @@ public class QuestBookScreen extends GuiScreen {
             int[] done = chapterCompletion(chapter);
             if (done[1] > 0) fontRendererObj.drawString(
                 I18n.format("waymark.gui.chapter_completion", done[0], done[1], done[0] * 100 / done[1]),
-                canvasX,
+                textX,
                 MARGIN + 4,
                 0xC0C0C0);
         }
         if (editMode) {
             right = editButtonX;
             String text = I18n.format("waymark.edit.help");
-            String help = GuiUtil.trim(fontRendererObj, text, right - canvasX - 8);
-            fontRendererObj.drawString(help, canvasX, MARGIN + 4, 0xFFCC66);
+            String help = GuiUtil.trim(fontRendererObj, text, right - textX - 8);
+            fontRendererObj.drawString(help, textX, MARGIN + 4, 0xFFCC66);
         }
     }
 
+    /**
+     * Opens the unpinned list while the mouse is over it (or a chapter or quest is being dragged to it) and folds it
+     * again otherwise, sliding a little each frame.
+     */
+    private void updateListWidth(int mx, int my) {
+        if (ClientSettings.isChapterListPinned()) {
+            listW = LIST_FULL;
+            return;
+        }
+        boolean dragging = dragMoved && (drag == Drag.CHAPTER || drag == Drag.MOVE);
+        boolean hovered = GuiUtil.inside(mx, my, listX, listY, listW, listH);
+        boolean nearForDrag = dragging && mx < listX + LIST_FULL;
+        int target = hovered || nearForDrag || drag == Drag.CHAPTER ? LIST_FULL : LIST_COLLAPSED;
+        int step = Math.max(1, Math.abs(target - listW) / 3);
+        listW = listW < target ? Math.min(target, listW + step) : Math.max(target, listW - step);
+    }
+
+    /** A small pin next to the book title: pins the chapter list open, or lets it fold away. */
+    private void drawPinButton(int mx, int my) {
+        boolean pinned = ClientSettings.isChapterListPinned();
+        boolean hover = GuiUtil.inside(mx, my, pinX, MARGIN + 1, 12, 12);
+        GuiUtil.frame(pinX, MARGIN + 1, 12, 12, hover ? 0xFF404058 : 0xFF202030, pinned ? 0xFFFFCC66 : 0xFF606070);
+        int color = pinned ? 0xFFFFCC66 : 0xFFA0A0A0;
+        // A push pin: round head, short body, thin needle.
+        GuiUtil.rect(pinX + 4, MARGIN + 3, 4, 3, color);
+        GuiUtil.rect(pinX + 3, MARGIN + 6, 6, 1, color);
+        GuiUtil.rect(pinX + 6, MARGIN + 7, 1, 4, color);
+        if (hover) showTooltip(
+            java.util.Collections
+                .singletonList(I18n.format(pinned ? "waymark.gui.unpin_chapters" : "waymark.gui.pin_chapters")),
+            mx,
+            my);
+    }
+
     private void drawChapterList(QuestBook book, int mx, int my) {
-        GuiUtil.frame(listX, listY, LIST_WIDTH, listH, 0xC0101018, 0xFF404860);
+        GuiUtil.frame(listX, listY, listW, listH, 0xC0101018, 0xFF404860);
         List<Chapter> chapters = book.getChapters();
         boolean draggingToList = dragMoved && (drag == Drag.CHAPTER || drag == Drag.MOVE);
         // Holding a dragged chapter or quest near the list's top or bottom edge scrolls it.
-        if (draggingToList && mx >= listX && mx < listX + LIST_WIDTH) {
+        if (draggingToList && mx >= listX && mx < listX + listW) {
             if (my < listY + 16) listScroll -= 4;
             else if (my > listY + listH - 16) listScroll += 4;
         }
         listScroll = Math.max(0, Math.min(listScroll, chapters.size() * ROW - (listH - 4)));
 
-        GuiUtil.scissor(listX + 1, listY + 1, LIST_WIDTH - 2, listH - 2);
-        boolean mouseInList = GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH);
+        GuiUtil.scissor(listX + 1, listY + 1, listW - 2, listH - 2);
+        boolean mouseInList = GuiUtil.inside(mx, my, listX, listY, listW, listH);
         boolean draggingChapter = drag == Drag.CHAPTER && dragMoved && dragChapter < chapters.size();
         Chapter dragged = draggingChapter ? chapters.get(dragChapter) : null;
         // While a chapter is dragged the list is drawn in the order it would have if dropped now.
@@ -456,24 +512,25 @@ public class QuestBookScreen extends GuiScreen {
             if (y + ROW < listY || y > listY + listH) continue;
             Chapter c = shown.get(i);
             boolean selected = c == chapter;
-            if (c == dragged) GuiUtil.frame(listX + 1, y, LIST_WIDTH - 2, ROW, 0x50FFCC00, 0xFFFFCC00);
-            else if (selected) GuiUtil.rect(listX + 1, y, LIST_WIDTH - 2, ROW, 0xFF2A3550);
-            else if (!draggingChapter && mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW))
-                GuiUtil.rect(listX + 1, y, LIST_WIDTH - 2, ROW, 0x30FFFFFF);
+            if (c == dragged) GuiUtil.frame(listX + 1, y, listW - 2, ROW, 0x50FFCC00, 0xFFFFCC00);
+            else if (selected) GuiUtil.rect(listX + 1, y, listW - 2, ROW, 0xFF2A3550);
+            else if (!draggingChapter && mouseInList && GuiUtil.inside(mx, my, listX, y, listW, ROW))
+                GuiUtil.rect(listX + 1, y, listW - 2, ROW, 0x30FFFFFF);
 
             GuiUtil.item(chapterIcon(c), listX + 3, y + 2);
             String title = c.getTitle()
                 .isEmpty() ? c.getFilename() : GuiUtil.colorCodes(c.getTitle());
-            fontRendererObj.drawString(
-                GuiUtil.trim(fontRendererObj, title, LIST_WIDTH - 32),
+            // Titles only once the list has opened far enough to fit some text.
+            if (listW >= 60) fontRendererObj.drawString(
+                GuiUtil.trim(fontRendererObj, title, listW - 32),
                 listX + 22,
                 y + 6,
                 selected ? 0xFFFFFF : 0xC0C0C0);
-            if (hasClaimable(c)) GuiUtil.rect(listX + LIST_WIDTH - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
-            boolean rowHovered = mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW);
+            if (hasClaimable(c)) GuiUtil.rect(listX + listW - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
+            boolean rowHovered = mouseInList && GuiUtil.inside(mx, my, listX, y, listW, ROW);
             // A quest being dragged over a chapter shows where it will go.
             if (drag == Drag.MOVE && dragMoved && rowHovered && c != chapter)
-                GuiUtil.frame(listX + 1, y, LIST_WIDTH - 2, ROW, 0x30FFCC00, 0xFFFFCC00);
+                GuiUtil.frame(listX + 1, y, listW - 2, ROW, 0x30FFCC00, 0xFFFFCC00);
             if (rowHovered && drag == Drag.NONE) hoveredChapter = c;
         }
         GuiUtil.endScissor();
@@ -646,6 +703,12 @@ public class QuestBookScreen extends GuiScreen {
             questView.mouseClicked(mx, my, button);
             return;
         }
+        if (GuiUtil.inside(mx, my, pinX, MARGIN + 1, 12, 12)) {
+            ClientSettings.setChapterListPinned(!ClientSettings.isChapterListPinned());
+            initGui();
+            playClick();
+            return;
+        }
         if (claimAllW > 0 && GuiUtil.inside(mx, my, claimAllX, MARGIN, claimAllW, 14)) {
             for (Reward reward : claimableRewards(ClientQuests.getBook())) ClientQuests.claim(reward, -1);
             playClick();
@@ -656,7 +719,7 @@ public class QuestBookScreen extends GuiScreen {
             playClick();
             return;
         }
-        if (GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH)) {
+        if (GuiUtil.inside(mx, my, listX, listY, listW, listH)) {
             int index = (my - listY - 2 + listScroll) / ROW;
             List<Chapter> chapters = ClientQuests.getBook()
                 .getChapters();
@@ -733,7 +796,7 @@ public class QuestBookScreen extends GuiScreen {
             return;
         }
 
-        if (finished == Drag.MOVE && dragMoved && GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH)) {
+        if (finished == Drag.MOVE && dragMoved && GuiUtil.inside(mx, my, listX, listY, listW, listH)) {
             // Dropped on a chapter: move the quest there, or with Alt leave it and add a link to it there.
             Chapter target = chapterAt(my, chapters);
             if (target == null || target == chapter) return;
@@ -800,6 +863,17 @@ public class QuestBookScreen extends GuiScreen {
             () -> ClientQuests.sendEdit(BookEdits.deleteChapter(clicked)));
     }
 
+    /** A checkable menu entry that switches the quest to {@code mode}, or back to always visible if it is on. */
+    private static void visibilityToggle(ContextMenu menu, Quest quest, Visibility mode, String key) {
+        boolean on = quest.getVisibility() == mode;
+        menu.add((on ? "§a☑ §r" : "☐ ") + I18n.format(key), () -> {
+            JsonObject data = quest.toJson();
+            data.remove("visibility");
+            if (!on) data.addProperty("visibility", mode.key());
+            ClientQuests.sendEdit(BookEdits.updateQuest(quest, data));
+        });
+    }
+
     private void openEditMenu(Node node, int mx, int my) {
         menu = new ContextMenu(mx, my);
         if (node == null) {
@@ -827,6 +901,8 @@ public class QuestBookScreen extends GuiScreen {
             Quest quest = node.quest;
             menu.add(I18n.format("waymark.edit.edit_quest"), () -> editQuest(quest));
             menu.add(I18n.format("waymark.edit.copy_link"), () -> linkClipboard = quest.getId());
+            visibilityToggle(menu, quest, Visibility.NEVER, "waymark.edit.hide_editor_only");
+            visibilityToggle(menu, quest, Visibility.UNLOCKED, "waymark.edit.hide_until_unlocked");
             menu.addDangerous(
                 I18n.format("waymark.edit.delete_quest"),
                 I18n.format("waymark.edit.confirm"),
@@ -843,7 +919,7 @@ public class QuestBookScreen extends GuiScreen {
         int my = height - Mouse.getEventY() * height / mc.displayHeight - 1;
         if (questView != null) {
             questView.scroll(wheel > 0 ? -1 : 1);
-        } else if (GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH)) {
+        } else if (GuiUtil.inside(mx, my, listX, listY, listW, listH)) {
             listScroll += wheel > 0 ? -ROW : ROW;
         } else if (chapter != null && GuiUtil.inside(mx, my, canvasX, canvasY, canvasW, canvasH)) {
             zoomAt(mx, my, wheel > 0 ? 1.2 : 1 / 1.2);
