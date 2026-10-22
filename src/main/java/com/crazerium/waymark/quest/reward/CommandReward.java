@@ -1,7 +1,10 @@
 package com.crazerium.waymark.quest.reward;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.quest.Quest;
@@ -30,6 +33,16 @@ public class CommandReward extends Reward {
 
     public void setCommand(String command) {
         this.command = command;
+    }
+
+    @Override
+    public String getTitle() {
+        return StatCollector.translateToLocal("waymark.reward.command");
+    }
+
+    @Override
+    public ItemStack getIcon() {
+        return new ItemStack(Blocks.command_block);
     }
 
     @Override

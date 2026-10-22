@@ -1,1 +1,22 @@
+key.categories.waymark=Waymark
+key.waymark.open=Открыть книгу квестов
+
 waymark.quest.completed=Квест выполнен: %s
+
+waymark.gui.title=Книга квестов
+waymark.gui.loading=Ожидание квестов от сервера...
+waymark.gui.no_chapters=Глав пока нет
+waymark.gui.locked=Закрыт
+waymark.gui.completed=Выполнен
+waymark.gui.claimable=Можно забрать награду
+waymark.gui.requires=Требуется: %s
+waymark.gui.tasks=Задачи
+waymark.gui.rewards=Награды
+waymark.gui.submit=Сдать
+waymark.gui.claim=Забрать
+
+waymark.task.checkmark=Отметить выполненным
+waymark.task.item.ore=Любой %s
+waymark.reward.xp=%s опыта
+waymark.reward.xp_levels=%s ур. опыта
+waymark.reward.command=Особая награда

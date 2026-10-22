@@ -1,6 +1,7 @@
 package com.crazerium.waymark.quest.task;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.quest.Quest;
@@ -17,6 +18,16 @@ public class CheckmarkTask extends Task {
     @Override
     public TaskType<?> getType() {
         return BuiltinTypes.CHECKMARK_TASK;
+    }
+
+    @Override
+    public String getTitle() {
+        return StatCollector.translateToLocal("waymark.task.checkmark");
+    }
+
+    @Override
+    public boolean hasSubmitButton() {
+        return true;
     }
 
     @Override

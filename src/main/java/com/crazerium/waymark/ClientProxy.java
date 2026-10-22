@@ -10,6 +10,7 @@ public class ClientProxy extends CommonProxy {
     @Override
     public void init(FMLInitializationEvent event) {
         super.init(event);
+        ClientEvents.registerKeys();
         FMLCommonHandler.instance()
             .bus()
             .register(new ClientEvents());

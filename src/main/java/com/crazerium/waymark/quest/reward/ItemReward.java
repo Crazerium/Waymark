@@ -43,6 +43,17 @@ public class ItemReward extends Reward {
     }
 
     @Override
+    public String getTitle() {
+        String name = item != null ? item.getDisplayName() : "?";
+        return count > 1 ? count + "x " + name : name;
+    }
+
+    @Override
+    public ItemStack getIcon() {
+        return item;
+    }
+
+    @Override
     public void claim(EntityPlayerMP player) {
         if (item == null) return;
         int remaining = count;

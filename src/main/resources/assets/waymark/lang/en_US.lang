@@ -1,1 +1,22 @@
+key.categories.waymark=Waymark
+key.waymark.open=Open Quest Book
+
 waymark.quest.completed=Quest completed: %s
+
+waymark.gui.title=Quest Book
+waymark.gui.loading=Waiting for quests from the server...
+waymark.gui.no_chapters=No chapters yet
+waymark.gui.locked=Locked
+waymark.gui.completed=Completed
+waymark.gui.claimable=Rewards ready to claim
+waymark.gui.requires=Requires: %s
+waymark.gui.tasks=Tasks
+waymark.gui.rewards=Rewards
+waymark.gui.submit=Submit
+waymark.gui.claim=Claim
+
+waymark.task.checkmark=Mark as done
+waymark.task.item.ore=Any %s
+waymark.reward.xp=%s XP
+waymark.reward.xp_levels=%s levels
+waymark.reward.command=Special reward

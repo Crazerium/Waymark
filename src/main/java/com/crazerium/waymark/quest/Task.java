@@ -34,6 +34,14 @@ public abstract class Task extends QuestObject {
         return null;
     }
 
+    /** Short text shown in the quest window, e.g. "16x Oak Wood". */
+    public abstract String getTitle();
+
+    /** True if the quest window should show a submit button while the task can progress. */
+    public boolean hasSubmitButton() {
+        return false;
+    }
+
     /** True if the server should call {@link #detect} periodically for players who can progress this task. */
     public boolean isAutoDetected() {
         return false;

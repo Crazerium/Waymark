@@ -1,6 +1,9 @@
 package com.crazerium.waymark.quest.reward;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
+import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.quest.Quest;
@@ -38,6 +41,17 @@ public class XpReward extends Reward {
 
     public void setLevels(boolean levels) {
         this.levels = levels;
+    }
+
+    @Override
+    public String getTitle() {
+        return StatCollector
+            .translateToLocalFormatted(levels ? "waymark.reward.xp_levels" : "waymark.reward.xp", amount);
+    }
+
+    @Override
+    public ItemStack getIcon() {
+        return new ItemStack(Items.experience_bottle);
     }
 
     @Override

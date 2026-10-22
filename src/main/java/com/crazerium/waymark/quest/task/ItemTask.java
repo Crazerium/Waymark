@@ -2,6 +2,7 @@ package com.crazerium.waymark.quest.task;
 
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.StatCollector;
 import net.minecraftforge.oredict.OreDictionary;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
@@ -85,6 +86,20 @@ public class ItemTask extends Task {
             for (ItemStack ore : OreDictionary.getOres(oreDict)) return ore;
         }
         return null;
+    }
+
+    @Override
+    public String getTitle() {
+        String name;
+        if (!oreDict.isEmpty()) name = StatCollector.translateToLocalFormatted("waymark.task.item.ore", oreDict);
+        else if (item != null) name = item.getDisplayName();
+        else name = "?";
+        return count > 1 ? count + "x " + name : name;
+    }
+
+    @Override
+    public boolean hasSubmitButton() {
+        return consume;
     }
 
     /** Tasks that keep the items just check the inventory; tasks that consume them wait for the submit button. */

@@ -1,6 +1,7 @@
 package com.crazerium.waymark.quest;
 
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
 
 import com.google.gson.JsonObject;
 
@@ -24,6 +25,13 @@ public abstract class Reward extends QuestObject {
     }
 
     public abstract RewardType<?> getType();
+
+    /** Short text shown in the quest window, e.g. "50 XP". */
+    public abstract String getTitle();
+
+    public ItemStack getIcon() {
+        return null;
+    }
 
     /** Gives the reward to the player. Called on the server only. */
     public abstract void claim(EntityPlayerMP player);
