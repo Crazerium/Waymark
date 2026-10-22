@@ -7,13 +7,14 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.world.World;
 import net.minecraftforge.common.DimensionManager;
+import net.minecraftforge.fluids.Fluid;
 
 import com.crazerium.waymark.Waymark;
 
 import cpw.mods.fml.common.Loader;
 
 /**
- * Applied Energistics 2 support: a team's bound ME network counts for its item tasks. Every call checks that the
+ * Applied Energistics 2 support: a team's bound ME network counts for its item and fluid tasks. Every call checks the
  * network's world and chunk are loaded and safely does nothing when AE2 is missing.
  */
 public final class AppEng {
@@ -64,6 +65,32 @@ public final class AppEng {
         if (world == null) return 0;
         try {
             return AppEngAccess.extract(world, link[1], link[2], link[3], player, matches, amount);
+        } catch (LinkageError | RuntimeException e) {
+            fail(e);
+            return 0;
+        }
+    }
+
+    /** See {@link AppEngAccess#forEachFluid}; false when the network cannot be reached. */
+    public static boolean forEachFluid(int[] link, BiConsumer<Fluid, Long> each) {
+        if (!available()) return false;
+        World world = world(link);
+        if (world == null) return false;
+        try {
+            return AppEngAccess.forEachFluid(world, link[1], link[2], link[3], each);
+        } catch (LinkageError | RuntimeException e) {
+            fail(e);
+            return false;
+        }
+    }
+
+    /** See {@link AppEngAccess#extractFluid}; 0 when the network cannot be reached. */
+    public static long extractFluid(int[] link, EntityPlayerMP player, Fluid fluid, long amount) {
+        if (!available() || fluid == null || amount <= 0) return 0;
+        World world = world(link);
+        if (world == null) return 0;
+        try {
+            return AppEngAccess.extractFluid(world, link[1], link[2], link[3], player, fluid, amount);
         } catch (LinkageError | RuntimeException e) {
             fail(e);
             return 0;

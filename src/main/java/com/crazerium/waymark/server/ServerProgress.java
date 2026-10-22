@@ -20,6 +20,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraftforge.fluids.Fluid;
 import net.minecraftforge.oredict.OreDictionary;
 
 import com.crazerium.waymark.compat.AppEng;
@@ -39,6 +40,7 @@ import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.reward.ChoiceReward;
 import com.crazerium.waymark.quest.task.CraftTask;
+import com.crazerium.waymark.quest.task.FluidTask;
 import com.crazerium.waymark.quest.task.ItemFilter;
 import com.crazerium.waymark.quest.task.ItemTask;
 import com.crazerium.waymark.quest.task.KillTask;
@@ -84,6 +86,7 @@ public final class ServerProgress {
         autoDetectedTasks.clear();
         heldByItem.clear();
         networkCounts.clear();
+        networkFluids.clear();
         networkCheckedAt.clear();
         heldByOre.clear();
         dependents.clear();
@@ -179,6 +182,13 @@ public final class ServerProgress {
         detectHeldItems(team, player);
         for (Task task : autoDetectedTasks) {
             if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
+            if (task instanceof FluidTask) {
+                // Fluid in containers and in the bound ME network add up.
+                FluidTask fluidTask = (FluidTask) task;
+                long have = fluidTask.countHeld(player) + networkFluids(team).getOrDefault(fluidTask.getFluid(), 0L);
+                setProgress(team, task, Math.max(team.getProgress(task), Math.min(have, fluidTask.getAmount())));
+                continue;
+            }
             setProgress(team, task, task.detect(player, team.getProgress(task)));
         }
     }
@@ -238,6 +248,7 @@ public final class ServerProgress {
     private static final long NETWORK_INTERVAL_MS = 5000;
     private static final Map<UUID, Map<ItemTask, Long>> networkCounts = new HashMap<>();
     private static final Map<UUID, Long> networkCheckedAt = new HashMap<>();
+    private static final Map<UUID, Map<Fluid, Long>> networkFluids = new HashMap<>();
 
     /**
      * The bound network's contents counted per "have items" task, refreshed every few seconds. Empty when the team has
@@ -252,12 +263,21 @@ public final class ServerProgress {
             return networkCounts.getOrDefault(team.getId(), Collections.emptyMap());
         networkCheckedAt.put(team.getId(), now);
         Map<ItemTask, Long> counts = new HashMap<>();
+        Map<Fluid, Long> fluids = new HashMap<>();
         if (meLinkUsable(team, link)) {
             Set<ItemTask> candidates = new HashSet<>();
             AppEng.forEachStored(link, (stack, size) -> count(counts, candidates, stack, size));
+            AppEng.forEachFluid(link, (fluid, amount) -> fluids.merge(fluid, amount, Long::sum));
         }
         networkCounts.put(team.getId(), counts);
+        networkFluids.put(team.getId(), fluids);
         return counts;
+    }
+
+    /** mB of each fluid in the team's bound network, refreshed together with the item counts. */
+    private static Map<Fluid, Long> networkFluids(TeamProgress team) {
+        networkCounts(team);
+        return networkFluids.getOrDefault(team.getId(), Collections.emptyMap());
     }
 
     /** The network may only be used while its chunk is claimed by this very team. */
@@ -329,6 +349,18 @@ public final class ServerProgress {
         if (team.isComplete(task) || !team.canProgress(task.getQuest())) return;
         setProgress(team, task, task.submit(player, team.getProgress(task)));
         // What the inventory did not cover is taken from the team's bound ME network.
+        if (task instanceof FluidTask && ((FluidTask) task).isConsume() && !team.isComplete(task)) {
+            int[] link = team.getMeLink();
+            if (link != null && meLinkUsable(team, link)) {
+                FluidTask fluidTask = (FluidTask) task;
+                long need = fluidTask.getAmount() - team.getProgress(task);
+                long taken = AppEng.extractFluid(link, player, fluidTask.getFluid(), need);
+                if (taken > 0) {
+                    setProgress(team, task, team.getProgress(task) + taken);
+                    networkCheckedAt.remove(team.getId());
+                }
+            }
+        }
         if (task instanceof ItemTask && ((ItemTask) task).isConsume() && !team.isComplete(task)) {
             int[] link = team.getMeLink();
             if (link != null && meLinkUsable(team, link)) {

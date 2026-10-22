@@ -10,7 +10,10 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.tileentity.TileEntity;
 import net.minecraft.world.World;
 import net.minecraftforge.common.util.ForgeDirection;
+import net.minecraftforge.fluids.Fluid;
+import net.minecraftforge.fluids.FluidStack;
 
+import appeng.api.AEApi;
 import appeng.api.config.Actionable;
 import appeng.api.networking.IGrid;
 import appeng.api.networking.IGridHost;
@@ -19,6 +22,7 @@ import appeng.api.networking.security.IActionHost;
 import appeng.api.networking.security.PlayerSource;
 import appeng.api.networking.storage.IStorageGrid;
 import appeng.api.storage.IMEMonitor;
+import appeng.api.storage.data.IAEFluidStack;
 import appeng.api.storage.data.IAEItemStack;
 
 /** Calls into Applied Energistics 2. Only loaded when AE2 is installed, so nothing else may reference AE2 classes. */
@@ -56,6 +60,38 @@ final class AppEngAccess {
             each.accept(stack, stored.getStackSize());
         }
         return true;
+    }
+
+    private static IMEMonitor<IAEFluidStack> fluids(TileEntity tile) {
+        IGrid grid = grid(tile);
+        if (grid == null) return null;
+        IStorageGrid storage = grid.getCache(IStorageGrid.class);
+        return storage != null ? storage.getFluidInventory() : null;
+    }
+
+    /** Calls {@code each} with every stored fluid and its amount in mB; false if the network is unreachable. */
+    static boolean forEachFluid(World world, int x, int y, int z, BiConsumer<Fluid, Long> each) {
+        IMEMonitor<IAEFluidStack> monitor = fluids(world.getTileEntity(x, y, z));
+        if (monitor == null) return false;
+        for (IAEFluidStack stored : monitor.getStorageList()) {
+            if (stored != null && stored.getStackSize() > 0 && stored.getFluid() != null)
+                each.accept(stored.getFluid(), stored.getStackSize());
+        }
+        return true;
+    }
+
+    /** Drains up to {@code amount} mB of the fluid from the network; returns how much was drained. */
+    static long extractFluid(World world, int x, int y, int z, EntityPlayerMP player, Fluid fluid, long amount) {
+        TileEntity tile = world.getTileEntity(x, y, z);
+        IMEMonitor<IAEFluidStack> monitor = fluids(tile);
+        if (monitor == null) return 0;
+        IAEFluidStack request = AEApi.instance()
+            .storage()
+            .createFluidStack(new FluidStack(fluid, 1));
+        request.setStackSize(amount);
+        PlayerSource source = new PlayerSource(player, tile instanceof IActionHost ? (IActionHost) tile : null);
+        IAEFluidStack got = monitor.extractItems(request, Actionable.MODULATE, source);
+        return got != null ? got.getStackSize() : 0;
     }
 
     /** Takes up to {@code amount} matching items out of the network; returns how many were taken. */

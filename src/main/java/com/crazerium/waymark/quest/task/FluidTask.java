@@ -97,16 +97,29 @@ public class FluidTask extends Task {
         return fs != null && fs.getFluid() == fluid && fs.amount > 0 ? fs : null;
     }
 
-    @Override
-    public long detect(EntityPlayerMP player, long progress) {
-        if (consume) return progress;
+    public long getAmount() {
+        return amount;
+    }
+
+    public boolean isConsume() {
+        return consume;
+    }
+
+    /** How many mB of the fluid the player carries in containers. */
+    public long countHeld(EntityPlayerMP player) {
         Fluid f = getFluid();
         long found = 0;
         for (ItemStack stack : player.inventory.mainInventory) {
             FluidStack fs = contents(stack, f);
             if (fs != null) found += (long) fs.amount * stack.stackSize;
         }
-        return Math.max(progress, Math.min(found, amount));
+        return found;
+    }
+
+    @Override
+    public long detect(EntityPlayerMP player, long progress) {
+        if (consume) return progress;
+        return Math.max(progress, Math.min(countHeld(player), amount));
     }
 
     @Override
