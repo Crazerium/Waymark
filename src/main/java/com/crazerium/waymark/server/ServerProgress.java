@@ -13,9 +13,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.util.ChatComponentTranslation;
-import net.minecraft.util.ChatStyle;
-import net.minecraft.util.EnumChatFormatting;
 
 import com.crazerium.waymark.io.ProgressStorage;
 import com.crazerium.waymark.network.MessageBlob;
@@ -254,15 +251,10 @@ public final class ServerProgress {
     private static void complete(TeamProgress team, Quest quest) {
         long time = System.currentTimeMillis();
         team.setCompleted(quest.getId(), time);
+        // Clients show a "quest completed" notification when this arrives.
         sendToTeam(team, new MessageQuestCompleted(quest.getId(), time));
 
-        ChatComponentTranslation message = new ChatComponentTranslation(
-            "waymark.quest.completed",
-            quest.getDisplayTitle());
-        message.setChatStyle(new ChatStyle().setColor(EnumChatFormatting.GREEN));
-        for (EntityPlayerMP player : onlineMembers(team)) {
-            player.addChatMessage(message);
-            if (!quest.isAutoClaim()) continue;
+        if (quest.isAutoClaim()) for (EntityPlayerMP player : onlineMembers(team)) {
             for (Reward reward : quest.getRewards()) {
                 if (!(reward instanceof ChoiceReward)) claim(player, reward.getId(), -1);
             }

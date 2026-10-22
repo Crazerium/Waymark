@@ -21,12 +21,16 @@ import com.crazerium.waymark.client.ClientEvents;
 import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.client.QuestState;
 import com.crazerium.waymark.client.compat.Recipes;
+import com.crazerium.waymark.progress.TeamProgress;
 import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.Chapter;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.QuestLink;
 import com.crazerium.waymark.quest.QuestObject;
+import com.crazerium.waymark.quest.Reward;
+import com.crazerium.waymark.quest.Visibility;
+import com.crazerium.waymark.quest.reward.ChoiceReward;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 
@@ -80,6 +84,7 @@ public class QuestBookScreen extends GuiScreen {
     /** Edit mode: the quest copied with "Copy as link", pasted as a link into another chapter. */
     private static long linkClipboard;
     private int editButtonX, editButtonW;
+    private int claimAllX, claimAllW;
 
     private List<String> tooltip;
     private ItemStack tooltipStack;
@@ -332,7 +337,7 @@ public class QuestBookScreen extends GuiScreen {
         boolean blocked = questView != null || menu != null || prompt != null;
         int hx = blocked ? -1 : mx;
         int hy = blocked ? -1 : my;
-        drawEditHeader(hx, hy);
+        drawHeader(book, hx, hy);
         drawChapterList(book, hx, hy);
         drawCanvas(hx, hy);
 
@@ -358,16 +363,67 @@ public class QuestBookScreen extends GuiScreen {
         RenderHelper.disableStandardItemLighting();
     }
 
-    /** The edit mode toggle (operators only) and, while editing, a line of help. */
-    private void drawEditHeader(int mx, int my) {
-        if (!ClientQuests.canEdit()) return;
-        String label = I18n.format(editMode ? "waymark.edit.on" : "waymark.edit.off");
-        editButtonW = fontRendererObj.getStringWidth(label) + 12;
-        editButtonX = width - MARGIN - editButtonW;
-        GuiUtil.button(fontRendererObj, editButtonX, MARGIN, editButtonW, 14, label, mx, my);
+    /**
+     * The bar above the map: the open chapter's completion, a "claim all" button when rewards are waiting, and for
+     * operators the edit mode toggle (with a line of help while editing).
+     */
+    /** Rewards of completed quests the player has not taken yet, except choices, which need picking by hand. */
+    private static List<Reward> claimableRewards(QuestBook book) {
+        List<Reward> list = new ArrayList<>();
+        TeamProgress progress = ClientQuests.getProgress();
+        if (progress == null) return list;
+        java.util.UUID player = ClientQuests.playerId();
+        for (Quest quest : book.getAllQuests()) {
+            if (!progress.isCompleted(quest)) continue;
+            for (Reward reward : quest.getRewards()) {
+                if (!(reward instanceof ChoiceReward) && !progress.isClaimed(player, reward)) list.add(reward);
+            }
+        }
+        return list;
+    }
+
+    /** {done, total} over the chapter's quests that count: not optional and not invisible. */
+    private static int[] chapterCompletion(Chapter c) {
+        TeamProgress progress = ClientQuests.getProgress();
+        int done = 0, total = 0;
+        for (Quest quest : c.getQuests()) {
+            if (quest.isOptional() || quest.getVisibility() == Visibility.NEVER) continue;
+            total++;
+            if (progress != null && progress.hasEverCompleted(quest)) done++;
+        }
+        return new int[] { done, total };
+    }
+
+    private void drawHeader(QuestBook book, int mx, int my) {
+        int right = width - MARGIN;
+        editButtonW = 0;
+        if (ClientQuests.canEdit()) {
+            String label = I18n.format(editMode ? "waymark.edit.on" : "waymark.edit.off");
+            editButtonW = fontRendererObj.getStringWidth(label) + 12;
+            editButtonX = right - editButtonW;
+            GuiUtil.button(fontRendererObj, editButtonX, MARGIN, editButtonW, 14, label, mx, my);
+            right = editButtonX - 4;
+        }
+        claimAllW = 0;
+        if (!editMode && !claimableRewards(book).isEmpty()) {
+            String label = "§e" + I18n.format("waymark.gui.claim_all");
+            claimAllW = fontRendererObj.getStringWidth(label) + 12;
+            claimAllX = right - claimAllW;
+            GuiUtil.button(fontRendererObj, claimAllX, MARGIN, claimAllW, 14, label, mx, my);
+            right = claimAllX - 4;
+        }
+        if (!editMode && chapter != null) {
+            int[] done = chapterCompletion(chapter);
+            if (done[1] > 0) fontRendererObj.drawString(
+                I18n.format("waymark.gui.chapter_completion", done[0], done[1], done[0] * 100 / done[1]),
+                canvasX,
+                MARGIN + 4,
+                0xC0C0C0);
+        }
         if (editMode) {
+            right = editButtonX;
             String text = I18n.format("waymark.edit.help");
-            String help = GuiUtil.trim(fontRendererObj, text, editButtonX - canvasX - 8);
+            String help = GuiUtil.trim(fontRendererObj, text, right - canvasX - 8);
             fontRendererObj.drawString(help, canvasX, MARGIN + 4, 0xFFCC66);
         }
     }
@@ -425,6 +481,9 @@ public class QuestBookScreen extends GuiScreen {
         if (hoveredChapter != null) {
             List<String> lines = new ArrayList<>();
             lines.add(GuiUtil.colorCodes(hoveredChapter.getTitle()));
+            int[] done = chapterCompletion(hoveredChapter);
+            if (done[1] > 0) lines
+                .add("§7" + I18n.format("waymark.gui.chapter_completion", done[0], done[1], done[0] * 100 / done[1]));
             for (String line : hoveredChapter.getDescription()) {
                 for (Object wrapped : fontRendererObj.listFormattedStringToWidth("§7" + GuiUtil.colorCodes(line), 220))
                     lines.add((String) wrapped);
@@ -585,6 +644,11 @@ public class QuestBookScreen extends GuiScreen {
         }
         if (questView != null) {
             questView.mouseClicked(mx, my, button);
+            return;
+        }
+        if (claimAllW > 0 && GuiUtil.inside(mx, my, claimAllX, MARGIN, claimAllW, 14)) {
+            for (Reward reward : claimableRewards(ClientQuests.getBook())) ClientQuests.claim(reward, -1);
+            playClick();
             return;
         }
         if (ClientQuests.canEdit() && GuiUtil.inside(mx, my, editButtonX, MARGIN, editButtonW, 14)) {

@@ -138,3 +138,7 @@ waymark.gui.recipe_keys=R: рецепты | U: применение
 waymark.edit.picker_inventory=Инвентарь
 waymark.edit.picker_search=Все предметы
 waymark.edit.picker_none=Ничего не найдено
+waymark.toast.completed=Квест выполнен!
+waymark.gui.claim_all=Забрать всё
+waymark.gui.chapter_completion=Выполнено: %s/%s (%s%%)
+item.waymark.quest_book.name=Книга квестов

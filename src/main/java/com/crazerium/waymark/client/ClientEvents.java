@@ -35,5 +35,6 @@ public class ClientEvents {
     @SubscribeEvent
     public void onDisconnect(FMLNetworkEvent.ClientDisconnectionFromServerEvent event) {
         ClientQuests.clear();
+        Toasts.clear();
     }
 }

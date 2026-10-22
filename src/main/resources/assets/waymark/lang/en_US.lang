@@ -138,3 +138,7 @@ waymark.gui.recipe_keys=R: recipes | U: uses
 waymark.edit.picker_inventory=Inventory
 waymark.edit.picker_search=All items
 waymark.edit.picker_none=Nothing found
+waymark.toast.completed=Quest completed!
+waymark.gui.claim_all=Claim all
+waymark.gui.chapter_completion=Completed: %s/%s (%s%%)
+item.waymark.quest_book.name=Quest Book

@@ -83,6 +83,8 @@ public final class ClientQuests {
 
     public static void onQuestCompleted(long questId, long time) {
         if (progress != null) progress.setCompleted(questId, time);
+        Quest quest = book != null ? book.getQuest(questId) : null;
+        if (quest != null) Toasts.questCompleted(quest);
     }
 
     public static void onQuestReset(long questId) {

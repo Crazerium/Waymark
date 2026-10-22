@@ -1,9 +1,12 @@
 package com.crazerium.waymark;
 
+import net.minecraft.init.Items;
+import net.minecraft.item.ItemStack;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 
 import com.crazerium.waymark.item.ItemMissing;
+import com.crazerium.waymark.item.ItemQuestBook;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.server.ServerEvents;
@@ -26,6 +29,8 @@ public class CommonProxy {
         Waymark.LOG.info("{} {} loading", Waymark.NAME, Tags.VERSION);
         ItemMissing.INSTANCE = new ItemMissing();
         GameRegistry.registerItem(ItemMissing.INSTANCE, "missing");
+        ItemQuestBook.INSTANCE = new ItemQuestBook();
+        GameRegistry.registerItem(ItemQuestBook.INSTANCE, "quest_book");
         BuiltinTypes.init();
         WaymarkNetwork.init();
         ServerQuests.init(event.getModConfigurationDirectory());
@@ -37,9 +42,14 @@ public class CommonProxy {
             .bus()
             .register(events);
         MinecraftForge.EVENT_BUS.register(events);
+        // A book and a compass: a guide for the way ahead.
+        GameRegistry.addShapelessRecipe(new ItemStack(ItemQuestBook.INSTANCE), Items.book, Items.compass);
     }
 
     public void postInit(FMLPostInitializationEvent event) {}
+
+    /** Opens the quest book; only does something on the client. */
+    public void openQuestBook() {}
 
     public void serverStarting(FMLServerStartingEvent event) {
         ServerProgress.load(DimensionManager.getCurrentSaveRootDirectory());
