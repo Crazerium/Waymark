@@ -11,6 +11,9 @@ import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.item.ItemStack;
+import net.minecraftforge.fluids.FluidContainerRegistry;
+import net.minecraftforge.fluids.FluidStack;
+import net.minecraftforge.fluids.IFluidContainerItem;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -53,6 +56,7 @@ public class ObjectEditScreen extends GuiScreen {
 
     private ItemPicker picker;
     private ItemStack tooltipStack;
+    private boolean fluidHint;
     private int px, py, pw, ph;
 
     /** {@code onSave} gets the edited JSON; it is not called on cancel. */
@@ -147,8 +151,11 @@ public class ObjectEditScreen extends GuiScreen {
         textFields.clear();
         int y = py + 24;
         for (EditorField f : fields) {
-            if (f.kind == EditorField.Kind.TEXT || f.kind == EditorField.Kind.INTEGER) {
-                GuiTextField field = new GuiTextField(fontRendererObj, px + LABEL_W, y + 3, pw - LABEL_W - 10, 14);
+            if (f.kind == EditorField.Kind.TEXT || f.kind == EditorField.Kind.INTEGER
+                || f.kind == EditorField.Kind.FLUID) {
+                // Fluid fields leave room for the "take from container" button.
+                int fw = pw - LABEL_W - 10 - (f.kind == EditorField.Kind.FLUID ? 20 : 0);
+                GuiTextField field = new GuiTextField(fontRendererObj, px + LABEL_W, y + 3, fw, 14);
                 field.setMaxStringLength(2000);
                 field.setText(texts.get(f.key));
                 textFields.put(f.key, field);
@@ -180,6 +187,7 @@ public class ObjectEditScreen extends GuiScreen {
     @Override
     public void drawScreen(int mx, int my, float partialTicks) {
         tooltipStack = null;
+        fluidHint = false;
         drawDefaultBackground();
         int hx = picker == null ? mx : -1, hy = picker == null ? my : -1;
         GuiUtil.frame(px, py, pw, ph, 0xF0101018, 0xFF8090B0);
@@ -215,6 +223,14 @@ public class ObjectEditScreen extends GuiScreen {
                     }
                     break;
                 }
+                case FLUID: {
+                    textFields.get(f.key)
+                        .drawTextBox();
+                    int bx = px + pw - 26;
+                    GuiUtil.button(fontRendererObj, bx, y + 2, 16, 16, "§b⇩", hx, hy);
+                    if (GuiUtil.inside(hx, hy, bx, y + 2, 16, 16)) fluidHint = true;
+                    break;
+                }
                 default:
                     textFields.get(f.key)
                         .drawTextBox();
@@ -233,6 +249,11 @@ public class ObjectEditScreen extends GuiScreen {
         }
         super.drawScreen(mx, my, partialTicks);
         if (tooltipStack != null) renderToolTip(tooltipStack, mx, my);
+        else if (fluidHint) drawHoveringText(
+            java.util.Collections.singletonList(I18n.format("waymark.edit.fluid_from_container")),
+            mx,
+            my,
+            fontRendererObj);
     }
 
     private int maxSlots() {
@@ -291,6 +312,13 @@ public class ObjectEditScreen extends GuiScreen {
                     }
                     break;
                 }
+                case FLUID:
+                    if (GuiUtil.inside(mx, my, px + pw - 26, y + 2, 16, 16)) picker = new ItemPicker(stack -> {
+                        String name = fluidName(stack);
+                        if (name != null) textFields.get(f.key)
+                            .setText(name);
+                    }, false);
+                    break;
                 default:
             }
             y += ROW;
@@ -299,6 +327,16 @@ public class ObjectEditScreen extends GuiScreen {
         int by = py + ph - 22;
         if (GuiUtil.inside(mx, my, px + pw - 140, by, 64, 16)) save();
         else if (GuiUtil.inside(mx, my, px + pw - 72, by, 64, 16)) mc.displayGuiScreen(parent);
+    }
+
+    /** The registry name of the fluid in a container (bucket, cell, tank), or null if it holds none. */
+    private static String fluidName(ItemStack stack) {
+        if (stack == null || stack.getItem() == null) return null;
+        FluidStack fs = stack.getItem() instanceof IFluidContainerItem
+            ? ((IFluidContainerItem) stack.getItem()).getFluid(stack)
+            : FluidContainerRegistry.getFluidForFilledItem(stack);
+        return fs != null && fs.getFluid() != null ? fs.getFluid()
+            .getName() : null;
     }
 
     private static JsonObject single(ItemStack stack) {

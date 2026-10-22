@@ -17,7 +17,9 @@ public final class EditorField {
         /** One item without a count: {"id", "damage", "nbt"}. */
         ITEM,
         /** A list of items with their counts. */
-        ITEM_LIST
+        ITEM_LIST,
+        /** A fluid name; the editor can also take it from a fluid container. */
+        FLUID
     }
 
     public final String key;
@@ -41,6 +43,10 @@ public final class EditorField {
 
     public static EditorField bool(String key, boolean def) {
         return new EditorField(key, Kind.BOOLEAN, new JsonPrimitive(def));
+    }
+
+    public static EditorField fluid(String key, String def) {
+        return new EditorField(key, Kind.FLUID, new JsonPrimitive(def));
     }
 
     public static EditorField item(String key) {

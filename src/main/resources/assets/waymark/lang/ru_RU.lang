@@ -128,3 +128,7 @@ waymark.edit.right_click_edit=ПКМ: изменить
 waymark.edit.edit=Изменить
 waymark.edit.remove=Удалить
 waymark.edit.description_heading=Описание квеста (Ctrl+Enter сохраняет)
+waymark.task.fluid=%s mB: %s
+waymark.task_type.fluid=Жидкость
+waymark.field.fluid=Жидкость
+waymark.edit.fluid_from_container=Взять жидкость из контейнера в инвентаре

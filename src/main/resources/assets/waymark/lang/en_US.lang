@@ -128,3 +128,7 @@ waymark.edit.right_click_edit=Right-click to edit
 waymark.edit.edit=Edit
 waymark.edit.remove=Remove
 waymark.edit.description_heading=Quest description (Ctrl+Enter saves)
+waymark.task.fluid=%s mB of %s
+waymark.task_type.fluid=Fluid
+waymark.field.fluid=Fluid
+waymark.edit.fluid_from_container=Take the fluid from a container in your inventory

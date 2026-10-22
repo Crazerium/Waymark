@@ -11,6 +11,7 @@ import com.crazerium.waymark.quest.reward.ItemReward;
 import com.crazerium.waymark.quest.reward.XpReward;
 import com.crazerium.waymark.quest.task.CheckmarkTask;
 import com.crazerium.waymark.quest.task.CraftTask;
+import com.crazerium.waymark.quest.task.FluidTask;
 import com.crazerium.waymark.quest.task.ItemTask;
 import com.crazerium.waymark.quest.task.KillTask;
 import com.crazerium.waymark.quest.task.LocationTask;
@@ -28,6 +29,8 @@ public final class BuiltinTypes {
         .withIcon(new ItemStack(Items.iron_sword));
     public static final TaskType<LocationTask> LOCATION_TASK = TaskType.register("location", LocationTask::new)
         .withIcon(new ItemStack(Items.compass));
+    public static final TaskType<FluidTask> FLUID_TASK = TaskType.register("fluid", FluidTask::new)
+        .withIcon(new ItemStack(Items.water_bucket));
 
     public static final RewardType<ItemReward> ITEM_REWARD = RewardType.register("item", ItemReward::new)
         .withIcon(new ItemStack(Items.diamond));

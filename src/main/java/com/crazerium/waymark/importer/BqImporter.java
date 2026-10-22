@@ -338,23 +338,21 @@ public class BqImporter {
                 break;
             }
             case "bq_standard:fluid": {
-                // No fluid task yet: keep the quest completable with a checkmark that says what is needed.
-                StringBuilder title = new StringBuilder();
+                boolean consume = num(bq, "consume:1", 0) == 1;
                 for (Map.Entry<String, JsonElement> e : BqNbt.sortedByIndex(obj(bq, "requiredFluids:9"))) {
                     if (!e.getValue()
                         .isJsonObject()) continue;
                     JsonObject fluid = e.getValue()
                         .getAsJsonObject();
-                    if (title.length() > 0) title.append(", ");
-                    title.append(num(fluid, "Amount:3", 1000))
-                        .append(" mB ")
-                        .append(str(fluid, "FluidName:8", "?"));
+                    JsonObject task = new JsonObject();
+                    task.addProperty("type", "fluid");
+                    task.addProperty("fluid", str(fluid, "FluidName:8", "water"));
+                    int amount = num(fluid, "Amount:3", 1000);
+                    if (amount != 1000) task.addProperty("amount", amount);
+                    if (!consume) task.addProperty("consume", false);
+                    out.add(task);
                 }
-                JsonObject task = new JsonObject();
-                task.addProperty("type", "checkmark");
-                task.addProperty("title", title.toString());
-                out.add(task);
-                result.count(type + " -> checkmark (no fluid task yet)");
+                result.count(type + " -> fluid");
                 break;
             }
             case "bq_standard:meeting": {
