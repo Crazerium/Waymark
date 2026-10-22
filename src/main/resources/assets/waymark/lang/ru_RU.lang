@@ -35,7 +35,6 @@ item.waymark.missing.name=Отсутствующий предмет
 waymark.gui.linked_from=Квест из главы: %s
 waymark.edit.on=Редактирование
 waymark.edit.off=Редактировать
-waymark.edit.new_quest=Новый квест здесь
 waymark.edit.remove_link=Убрать ссылку
 waymark.edit.delete_quest=Удалить квест
 waymark.edit.confirm=Нажми ещё раз, чтобы удалить

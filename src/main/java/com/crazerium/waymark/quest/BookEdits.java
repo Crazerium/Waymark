@@ -107,6 +107,13 @@ public final class BookEdits {
         return op;
     }
 
+    /** Creates a quest that already has content, e.g. the task picked from the map menu. */
+    public static JsonObject createQuest(Chapter chapter, double x, double y, JsonObject data) {
+        JsonObject op = createQuest(chapter, x, y);
+        op.add("data", data);
+        return op;
+    }
+
     public static JsonObject deleteQuest(Quest quest) {
         JsonObject op = op(DELETE_QUEST);
         op.addProperty("quest", Ids.format(quest.getId()));
@@ -170,7 +177,9 @@ public final class BookEdits {
                 Chapter chapter = chapter(book, op);
                 long id = Ids.parse(JsonUtil.getString(op, "id", ""));
                 if (id == Ids.NONE || book.get(id) != null) throw new IllegalArgumentException("Bad new quest id");
-                chapter.createQuest(id, coord(op, "x"), coord(op, "y"));
+                Quest created = chapter.createQuest(id, coord(op, "x"), coord(op, "y"));
+                JsonObject data = JsonUtil.getObject(op, "data");
+                if (data != null) created.reload(data);
                 changed.add(chapter);
                 break;
             }

@@ -63,7 +63,17 @@ public final class ServerEditor {
         if (book == null || !canEdit(player)) return;
         // New objects get their ids here, so every copy of the book uses the same ones.
         String name = JsonUtil.getString(op, "op", "");
-        if (BookEdits.CREATE_QUEST.equals(name)) op.addProperty("id", Ids.format(book.newId()));
+        if (BookEdits.CREATE_QUEST.equals(name)) {
+            op.addProperty("id", Ids.format(book.newId()));
+            // Everything in a brand-new quest is new, so whatever ids the client sent are replaced.
+            JsonObject data = JsonUtil.getObject(op, "data");
+            if (data != null) for (String list : new String[] { "tasks", "rewards" }) {
+                for (JsonElement e : JsonUtil.getArray(data, list)) {
+                    if (e.isJsonObject()) e.getAsJsonObject()
+                        .addProperty("id", Ids.format(book.newId()));
+                }
+            }
+        }
         if (BookEdits.UPDATE_QUEST.equals(name)) assignIds(book, op);
         if (BookEdits.CREATE_CHAPTER.equals(name)) {
             op.addProperty("id", Ids.format(book.newId()));

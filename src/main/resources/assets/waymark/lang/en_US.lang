@@ -35,7 +35,6 @@ item.waymark.missing.name=Missing item
 waymark.gui.linked_from=Linked from: %s
 waymark.edit.on=Editing
 waymark.edit.off=Edit
-waymark.edit.new_quest=New quest here
 waymark.edit.remove_link=Remove link
 waymark.edit.delete_quest=Delete quest
 waymark.edit.confirm=Click again to delete

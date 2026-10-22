@@ -15,7 +15,6 @@ import org.lwjgl.input.Mouse;
 
 import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.quest.BookEdits;
-import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.RewardType;
@@ -401,20 +400,7 @@ public class QuestEditScreen extends GuiScreen {
 
     private boolean listClicked(List<JsonObject> list, int x, int w, int scroll, boolean isTasks, int mx, int my) {
         if (GuiUtil.inside(mx, my, x + w - 50, listTop - 17, 50, 14)) {
-            menu = new ContextMenu(mx, my);
-            if (isTasks) {
-                for (TaskType<?> type : TaskType.all()) menu.add(typeName(type.getId(), true), () -> {
-                    JsonObject json = new JsonObject();
-                    json.addProperty("type", type.getId());
-                    openObjectEditor(json, true, list::add);
-                });
-            } else {
-                for (RewardType<?> type : RewardType.all()) menu.add(typeName(type.getId(), false), () -> {
-                    JsonObject json = new JsonObject();
-                    json.addProperty("type", type.getId());
-                    openObjectEditor(json, false, list::add);
-                });
-            }
+            menu = ObjectEditScreen.typeMenu(this, mx, my, isTasks, list::add);
             return true;
         }
         if (!GuiUtil.inside(mx, my, x, listTop, w, listBottom - listTop)) return false;
@@ -431,18 +417,7 @@ public class QuestEditScreen extends GuiScreen {
     }
 
     private void openObjectEditor(JsonObject json, boolean isTask, java.util.function.Consumer<JsonObject> onSave) {
-        String type = JsonUtil.getString(json, "type", "");
-        List<EditorField> fields = new ArrayList<>();
-        if (isTask) {
-            fields.add(EditorField.text("title", ""));
-            fields.add(EditorField.bool("optional", false));
-            TaskType<?> t = TaskType.get(type);
-            if (t != null) fields.addAll(t.editorFields());
-        } else {
-            RewardType<?> r = RewardType.get(type);
-            if (r != null) fields.addAll(r.editorFields());
-        }
-        mc.displayGuiScreen(new ObjectEditScreen(this, typeName(type, isTask), fields, json, onSave));
+        mc.displayGuiScreen(ObjectEditScreen.create(this, json, isTask, onSave));
     }
 
     @Override

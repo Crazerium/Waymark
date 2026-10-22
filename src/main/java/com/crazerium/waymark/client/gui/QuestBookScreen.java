@@ -26,6 +26,8 @@ import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.QuestLink;
 import com.crazerium.waymark.quest.QuestObject;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -702,9 +704,15 @@ public class QuestBookScreen extends GuiScreen {
         menu = new ContextMenu(mx, my);
         if (node == null) {
             double x = snap(worldX(mx)), y = snap(worldY(my));
-            menu.add(
-                I18n.format("waymark.edit.new_quest"),
-                () -> ClientQuests.sendEdit(BookEdits.createQuest(chapter, x, y)));
+            // Like FTB Quests: pick a task type, fill in its form, and a quest with that task appears here.
+            Chapter target = chapter;
+            menu = ObjectEditScreen.typeMenu(this, mx, my, true, task -> {
+                JsonObject data = new JsonObject();
+                JsonArray tasks = new JsonArray();
+                tasks.add(task);
+                data.add("tasks", tasks);
+                ClientQuests.sendEdit(BookEdits.createQuest(target, x, y, data));
+            });
             Quest copied = ClientQuests.getBook()
                 .getQuest(linkClipboard);
             if (copied != null && copied.getChapter() != chapter) menu.add(

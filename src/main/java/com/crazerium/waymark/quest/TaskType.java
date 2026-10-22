@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import net.minecraft.item.ItemStack;
+
 import com.google.gson.JsonObject;
 
 /** A kind of task, identified in files by its string id. Other mods can register their own. */
@@ -20,6 +22,7 @@ public final class TaskType<T extends Task> {
 
     private final String id;
     private final Factory<T> factory;
+    private ItemStack icon;
 
     private TaskType(String id, Factory<T> factory) {
         this.id = id;
@@ -60,6 +63,17 @@ public final class TaskType<T extends Task> {
         T obj = factory.create(null, 0);
         obj.readJson(json);
         return obj;
+    }
+
+    /** Sets the icon shown next to this type in the editor's menus. */
+    public TaskType<T> withIcon(ItemStack icon) {
+        this.icon = icon;
+        return this;
+    }
+
+    /** The menu icon, or null if none was set. */
+    public ItemStack getIcon() {
+        return icon;
     }
 
     public String getId() {

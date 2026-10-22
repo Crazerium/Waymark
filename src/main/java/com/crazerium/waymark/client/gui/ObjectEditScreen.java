@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiTextField;
 import net.minecraft.client.resources.I18n;
@@ -15,6 +16,8 @@ import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
 
 import com.crazerium.waymark.quest.EditorField;
+import com.crazerium.waymark.quest.RewardType;
+import com.crazerium.waymark.quest.TaskType;
 import com.crazerium.waymark.util.JsonUtil;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -82,6 +85,49 @@ public class ObjectEditScreen extends GuiScreen {
                     texts.put(f.key, v != null && v.isJsonPrimitive() ? v.getAsString() : f.defaultValue.getAsString());
             }
         }
+    }
+
+    /** The form for a task or reward JSON; tasks also get their title and optional fields. */
+    static ObjectEditScreen create(GuiScreen parent, JsonObject json, boolean isTask, Consumer<JsonObject> onSave) {
+        String type = JsonUtil.getString(json, "type", "");
+        List<EditorField> fields = new ArrayList<>();
+        if (isTask) {
+            fields.add(EditorField.text("title", ""));
+            fields.add(EditorField.bool("optional", false));
+            TaskType<?> t = TaskType.get(type);
+            if (t != null) fields.addAll(t.editorFields());
+        } else {
+            RewardType<?> r = RewardType.get(type);
+            if (r != null) fields.addAll(r.editorFields());
+        }
+        return new ObjectEditScreen(parent, QuestEditScreen.typeName(type, isTask), fields, json, onSave);
+    }
+
+    /**
+     * A menu of every task (or reward) type with its icon. Picking one opens the form for a new object of that type,
+     * and saving the form passes the new JSON to {@code onCreate}.
+     */
+    static ContextMenu typeMenu(GuiScreen parent, int x, int y, boolean isTask, Consumer<JsonObject> onCreate) {
+        ContextMenu menu = new ContextMenu(x, y);
+        if (isTask) {
+            for (TaskType<?> type : TaskType.all()) menu.add(
+                type.getIcon(),
+                QuestEditScreen.typeName(type.getId(), true),
+                () -> openNew(parent, type.getId(), true, onCreate));
+        } else {
+            for (RewardType<?> type : RewardType.all()) menu.add(
+                type.getIcon(),
+                QuestEditScreen.typeName(type.getId(), false),
+                () -> openNew(parent, type.getId(), false, onCreate));
+        }
+        return menu;
+    }
+
+    private static void openNew(GuiScreen parent, String type, boolean isTask, Consumer<JsonObject> onCreate) {
+        JsonObject json = new JsonObject();
+        json.addProperty("type", type);
+        Minecraft.getMinecraft()
+            .displayGuiScreen(create(parent, json, isTask, onCreate));
     }
 
     static String label(String key) {
