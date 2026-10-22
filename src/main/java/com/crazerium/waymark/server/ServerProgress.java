@@ -8,18 +8,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.ChatComponentTranslation;
 import net.minecraft.util.ChatStyle;
 import net.minecraft.util.EnumChatFormatting;
 
 import com.crazerium.waymark.io.ProgressStorage;
+import com.crazerium.waymark.network.MessageBlob;
 import com.crazerium.waymark.network.MessageQuestCompleted;
 import com.crazerium.waymark.network.MessageRewardClaimed;
-import com.crazerium.waymark.network.MessageSyncBook;
-import com.crazerium.waymark.network.MessageSyncProgress;
 import com.crazerium.waymark.network.MessageTaskProgress;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.progress.TeamProgress;
@@ -28,6 +29,9 @@ import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.QuestObject;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
+import com.crazerium.waymark.quest.reward.ChoiceReward;
+import com.crazerium.waymark.quest.task.CraftTask;
+import com.crazerium.waymark.quest.task.KillTask;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
 
@@ -37,6 +41,8 @@ public final class ServerProgress {
     private static ProgressStorage storage;
     private static final Map<UUID, TeamProgress> teams = new HashMap<>();
     private static final List<Task> autoDetectedTasks = new ArrayList<>();
+    private static final List<CraftTask> craftTasks = new ArrayList<>();
+    private static final List<KillTask> killTasks = new ArrayList<>();
 
     private ServerProgress() {}
 
@@ -58,9 +64,13 @@ public final class ServerProgress {
 
     public static void onBookLoaded(QuestBook book) {
         autoDetectedTasks.clear();
+        craftTasks.clear();
+        killTasks.clear();
         for (Quest quest : book.getAllQuests()) {
             for (Task task : quest.getTasks()) {
                 if (task.isAutoDetected()) autoDetectedTasks.add(task);
+                if (task instanceof CraftTask) craftTasks.add((CraftTask) task);
+                if (task instanceof KillTask) killTasks.add((KillTask) task);
             }
         }
     }
@@ -95,9 +105,11 @@ public final class ServerProgress {
     /** Sends the whole book and the player's progress, then completes anything that is already done. */
     public static void syncPlayer(EntityPlayerMP player) {
         QuestBook book = ServerQuests.get();
-        WaymarkNetwork.CHANNEL.sendTo(new MessageSyncBook(book), player);
+        for (MessageBlob part : MessageBlob.split(MessageBlob.BOOK, ServerQuests.syncData()))
+            WaymarkNetwork.CHANNEL.sendTo(part, player);
         TeamProgress team = get(player);
-        WaymarkNetwork.CHANNEL.sendTo(new MessageSyncProgress(team), player);
+        for (MessageBlob part : MessageBlob.split(MessageBlob.PROGRESS, team.toJson()))
+            WaymarkNetwork.CHANNEL.sendTo(part, player);
         for (Quest quest : book.getAllQuests()) checkQuest(team, quest);
     }
 
@@ -123,15 +135,36 @@ public final class ServerProgress {
         setProgress(team, task, task.submit(player, team.getProgress(task)));
     }
 
-    public static void claim(EntityPlayerMP player, long rewardId) {
+    public static void onCrafted(EntityPlayerMP player, ItemStack stack, boolean smelted) {
+        if (stack == null || stack.stackSize <= 0) return;
+        TeamProgress team = get(player);
+        for (CraftTask task : craftTasks) {
+            if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
+            if (!(smelted ? task.countsSmelting() : task.countsCrafting()) || !task.getFilter()
+                .matches(stack)) continue;
+            setProgress(team, task, team.getProgress(task) + stack.stackSize);
+        }
+    }
+
+    public static void onKill(EntityPlayerMP player, Entity victim) {
+        TeamProgress team = get(player);
+        for (KillTask task : killTasks) {
+            if (team.isComplete(task) || !team.canProgress(task.getQuest()) || !task.matches(victim)) continue;
+            setProgress(team, task, team.getProgress(task) + 1);
+        }
+    }
+
+    public static void claim(EntityPlayerMP player, long rewardId, int choice) {
         QuestObject object = ServerQuests.get()
             .get(rewardId);
         if (!(object instanceof Reward)) return;
         Reward reward = (Reward) object;
+        if (reward instanceof ChoiceReward && (choice < 0 || choice >= ((ChoiceReward) reward).getChoices()
+            .size())) return;
         TeamProgress team = get(player);
         if (!team.isCompleted(reward.getQuest()) || team.isClaimed(player.getUniqueID(), reward)) return;
         team.setClaimed(player.getUniqueID(), reward.getId());
-        reward.claim(player);
+        reward.claim(player, choice);
         WaymarkNetwork.CHANNEL.sendTo(new MessageRewardClaimed(reward.getId()), player);
     }
 
@@ -159,11 +192,7 @@ public final class ServerProgress {
     }
 
     private static void checkQuest(TeamProgress team, Quest quest) {
-        if (!team.canProgress(quest)) return;
-        for (Task task : quest.getTasks()) {
-            if (!team.isComplete(task)) return;
-        }
-        complete(team, quest);
+        if (team.canProgress(quest) && team.areTasksDone(quest)) complete(team, quest);
     }
 
     private static void complete(TeamProgress team, Quest quest) {
@@ -175,7 +204,13 @@ public final class ServerProgress {
             "waymark.quest.completed",
             quest.getDisplayTitle());
         message.setChatStyle(new ChatStyle().setColor(EnumChatFormatting.GREEN));
-        for (EntityPlayerMP player : onlineMembers(team)) player.addChatMessage(message);
+        for (EntityPlayerMP player : onlineMembers(team)) {
+            player.addChatMessage(message);
+            if (!quest.isAutoClaim()) continue;
+            for (Reward reward : quest.getRewards()) {
+                if (!(reward instanceof ChoiceReward)) claim(player, reward.getId(), -1);
+            }
+        }
 
         // Quests without tasks complete as soon as they unlock, so completion can cascade.
         for (Quest dependent : quest.getBook()

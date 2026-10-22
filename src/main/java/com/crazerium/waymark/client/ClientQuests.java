@@ -65,8 +65,8 @@ public final class ClientQuests {
         WaymarkNetwork.CHANNEL.sendToServer(new MessageSubmitTask(task.getId()));
     }
 
-    public static void claim(Reward reward) {
-        WaymarkNetwork.CHANNEL.sendToServer(new MessageClaimReward(reward.getId()));
+    public static void claim(Reward reward, int choice) {
+        WaymarkNetwork.CHANNEL.sendToServer(new MessageClaimReward(reward.getId(), choice));
     }
 
     public static void clear() {

@@ -30,6 +30,11 @@ public final class RewardType<R extends Reward> {
         return type;
     }
 
+    /** A type that is not in the registry, for placeholders that should never be created from files. */
+    public static <R extends Reward> RewardType<R> unregistered(String id, Factory<R> factory) {
+        return new RewardType<>(id, factory);
+    }
+
     public static RewardType<?> get(String id) {
         return REGISTRY.get(id);
     }

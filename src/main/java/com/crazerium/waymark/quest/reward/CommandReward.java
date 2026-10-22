@@ -46,7 +46,7 @@ public class CommandReward extends Reward {
     }
 
     @Override
-    public void claim(EntityPlayerMP player) {
+    public void claim(EntityPlayerMP player, int choice) {
         if (command.isEmpty()) return;
         MinecraftServer server = MinecraftServer.getServer();
         server.getCommandManager()

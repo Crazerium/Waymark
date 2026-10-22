@@ -11,9 +11,11 @@ import net.minecraft.item.ItemStack;
 import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.client.QuestState;
 import com.crazerium.waymark.progress.TeamProgress;
+import com.crazerium.waymark.quest.LogicMode;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
+import com.crazerium.waymark.quest.reward.ChoiceReward;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -124,7 +126,11 @@ class QuestView {
         if (!quest.getTasks()
             .isEmpty()) {
             cy += 6;
-            font.drawString("§e" + I18n.format("waymark.gui.tasks"), left, cy, 0xFFFFFF);
+            String header = "§e" + I18n.format("waymark.gui.tasks");
+            if (quest.getTaskMode() != LogicMode.ALL) header += " §7" + I18n.format(
+                "waymark.gui.task_mode." + quest.getTaskMode()
+                    .key());
+            font.drawString(header, left, cy, 0xFFFFFF);
             cy += 12;
             boolean canProgress = progress != null && progress.canProgress(quest);
             for (Task task : quest.getTasks()) {
@@ -162,11 +168,12 @@ class QuestView {
                 drawIconRow(
                     font,
                     task.getIcon(),
-                    task.getTitle(),
+                    task.isOptional() ? task.getDisplayTitle() + " §8" + I18n.format("waymark.gui.optional")
+                        : task.getDisplayTitle(),
                     left,
                     cy,
                     textRight,
-                    done ? 0x88CC88 : 0xFFFFFF,
+                    done ? 0x88CC88 : task.isOptional() ? 0xAAAAAA : 0xFFFFFF,
                     mx,
                     my,
                     mouseInView);
@@ -187,7 +194,7 @@ class QuestView {
                     String check = "§a✔";
                     font.drawString(check, right - font.getStringWidth(check), cy + 5, 0xFFFFFF);
                     textRight -= 12;
-                } else if (completed) {
+                } else if (completed && !(reward instanceof ChoiceReward)) {
                     int bx = right - BUTTON_W;
                     GuiUtil.button(
                         font,
@@ -198,7 +205,7 @@ class QuestView {
                         I18n.format("waymark.gui.claim"),
                         mouseInView ? mx : -1,
                         my);
-                    areas.add(new Area(bx, cy + 1, BUTTON_W, 14, () -> ClientQuests.claim(reward)));
+                    areas.add(new Area(bx, cy + 1, BUTTON_W, 14, () -> ClientQuests.claim(reward, -1)));
                     textRight = bx - 4;
                 }
                 drawIconRow(
@@ -213,6 +220,8 @@ class QuestView {
                     my,
                     mouseInView);
                 cy += ROW;
+                if (reward instanceof ChoiceReward && !claimed)
+                    cy = drawChoices(font, (ChoiceReward) reward, completed, left, inner, cy, mx, my, mouseInView);
             }
         }
 
@@ -225,6 +234,36 @@ class QuestView {
             int barY = viewTop + (viewHeight - barH) * scroll / (contentHeight - viewHeight);
             GuiUtil.rect(x + w - 4, barY, 2, barH, 0xFF8090B0);
         }
+    }
+
+    /** Draws the options of a choice reward as clickable icons; returns the new y. */
+    private int drawChoices(FontRenderer font, ChoiceReward reward, boolean claimable, int left, int inner, int cy,
+        int mx, int my, boolean mouseInView) {
+        List<ItemStack> choices = reward.getChoices();
+        int perRow = Math.max(1, (inner - 20) / 20);
+        for (int i = 0; i < choices.size(); i++) {
+            int ix = left + 20 + (i % perRow) * 20;
+            int iy = cy + (i / perRow) * 20;
+            ItemStack stack = choices.get(i);
+            boolean hover = mouseInView && GuiUtil.inside(mx, my, ix - 1, iy - 1, 18, 18);
+            GuiUtil.frame(ix - 1, iy - 1, 18, 18, 0xFF1A1A24, hover && claimable ? 0xFFFFCC00 : 0xFF404860);
+            GuiUtil.item(stack, ix, iy);
+            if (stack.stackSize > 1) {
+                String n = String.valueOf(stack.stackSize);
+                font.drawStringWithShadow(n, ix + 17 - font.getStringWidth(n), iy + 9, 0xFFFFFF);
+            }
+            if (hover) screen.showItemTooltip(stack, mx, my);
+            if (claimable) {
+                int choice = i;
+                areas.add(new Area(ix - 1, iy - 1, 18, 18, () -> ClientQuests.claim(reward, choice)));
+            }
+        }
+        int rows = (choices.size() + perRow - 1) / perRow;
+        if (claimable) {
+            font.drawString("§e" + I18n.format("waymark.gui.pick_one"), left + 20, cy + rows * 20, 0xFFFFFF);
+            cy += 10;
+        }
+        return cy + rows * 20 + 2;
     }
 
     private void drawIconRow(FontRenderer font, ItemStack icon, String text, int left, int cy, int textRight, int color,

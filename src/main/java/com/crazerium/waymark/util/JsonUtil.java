@@ -1,15 +1,16 @@
 package com.crazerium.waymark.util;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.nbt.JsonToNBT;
-import net.minecraft.nbt.NBTBase;
-import net.minecraft.nbt.NBTTagCompound;
 
 import com.crazerium.waymark.Waymark;
+import com.crazerium.waymark.item.ItemMissing;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -75,36 +76,55 @@ public final class JsonUtil {
 
     /** {"id": "minecraft:stone", "damage": 1, "count": 2, "nbt": "{...}"}; defaults are omitted. */
     public static JsonObject writeStack(ItemStack stack) {
+        JsonObject original = ItemMissing.original(stack);
+        if (original != null) {
+            JsonObject json = new JsonObject();
+            for (Map.Entry<String, JsonElement> e : original.entrySet()) {
+                if (!e.getKey()
+                    .equals("count")) json.add(e.getKey(), e.getValue());
+            }
+            if (stack.stackSize != 1) json.addProperty("count", stack.stackSize);
+            return json;
+        }
         JsonObject json = new JsonObject();
         json.addProperty("id", Item.itemRegistry.getNameForObject(stack.getItem()));
         if (stack.getItemDamage() != 0) json.addProperty("damage", stack.getItemDamage());
         if (stack.stackSize != 1) json.addProperty("count", stack.stackSize);
-        if (stack.hasTagCompound()) json.addProperty(
-            "nbt",
-            stack.getTagCompound()
-                .toString());
+        if (stack.hasTagCompound()) json.addProperty("nbt", Snbt.write(stack.getTagCompound()));
         return json;
     }
 
-    /** Returns null if the item does not exist (e.g. its mod is not installed). */
+    private static final Set<String> warnedIds = new HashSet<>();
+
+    /**
+     * Returns null for a null json. Items that do not exist (their mod is not installed) or have broken NBT become
+     * {@link ItemMissing} placeholders that remember the original json.
+     */
     public static ItemStack readStack(JsonObject json) {
         if (json == null) return null;
         String id = getString(json, "id", "");
+        int count = getInt(json, "count", 1);
         Item item = (Item) Item.itemRegistry.getObject(id);
         if (item == null) {
-            Waymark.LOG.warn("Unknown item '{}'", id);
-            return null;
+            if (warnedIds.add(id)) Waymark.LOG.warn("Unknown item '{}', keeping it as a placeholder", id);
+            return missing(json, count);
         }
-        ItemStack stack = new ItemStack(item, getInt(json, "count", 1), getInt(json, "damage", 0));
+        ItemStack stack = new ItemStack(item, count, getInt(json, "damage", 0));
         String nbt = getString(json, "nbt", null);
         if (nbt != null) {
             try {
-                NBTBase tag = JsonToNBT.func_150315_a(nbt);
-                if (tag instanceof NBTTagCompound) stack.setTagCompound((NBTTagCompound) tag);
-            } catch (Exception e) {
+                stack.setTagCompound(Snbt.parseCompound(nbt));
+            } catch (IllegalArgumentException e) {
                 Waymark.LOG.warn("Invalid NBT for item '{}': {}", id, e.getMessage());
+                return missing(json, count);
             }
         }
+        return stack;
+    }
+
+    private static ItemStack missing(JsonObject json, int count) {
+        ItemStack stack = ItemMissing.create(json);
+        stack.stackSize = count;
         return stack;
     }
 }

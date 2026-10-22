@@ -2,11 +2,11 @@ package com.crazerium.waymark.progress;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-import com.crazerium.waymark.quest.DependencyMode;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
@@ -68,16 +68,24 @@ public class TeamProgress {
 
     /** Dependencies that point at deleted quests are ignored. */
     public boolean isUnlocked(Quest quest) {
-        boolean any = false;
-        boolean all = true;
-        boolean hasDeps = false;
-        for (Quest dep : quest.getDependencies()) {
-            hasDeps = true;
-            if (isCompleted(dep)) any = true;
-            else all = false;
+        List<Quest> deps = quest.getDependencies();
+        if (deps.isEmpty()) return true;
+        int met = 0;
+        for (Quest dep : deps) if (isCompleted(dep)) met++;
+        return quest.getDependencyMode()
+            .test(met, deps.size());
+    }
+
+    /** True if enough non-optional tasks are done for the quest's task mode. A quest with none is done at once. */
+    public boolean areTasksDone(Quest quest) {
+        int total = 0, met = 0;
+        for (Task task : quest.getTasks()) {
+            if (task.isOptional()) continue;
+            total++;
+            if (isComplete(task)) met++;
         }
-        if (!hasDeps) return true;
-        return quest.getDependencyMode() == DependencyMode.ANY ? any : all;
+        return total == 0 || quest.getTaskMode()
+            .test(met, total);
     }
 
     /** True if tasks of this quest can currently make progress. */

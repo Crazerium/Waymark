@@ -30,6 +30,11 @@ public final class TaskType<T extends Task> {
         return type;
     }
 
+    /** A type that is not in the registry, for placeholders that should never be created from files. */
+    public static <T extends Task> TaskType<T> unregistered(String id, Factory<T> factory) {
+        return new TaskType<>(id, factory);
+    }
+
     public static TaskType<?> get(String id) {
         return REGISTRY.get(id);
     }

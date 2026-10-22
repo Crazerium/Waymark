@@ -55,7 +55,7 @@ public class XpReward extends Reward {
     }
 
     @Override
-    public void claim(EntityPlayerMP player) {
+    public void claim(EntityPlayerMP player, int choice) {
         if (levels) player.addExperienceLevel(amount);
         else player.addExperience(amount);
     }

@@ -6,6 +6,7 @@ import com.crazerium.waymark.progress.TeamProgress;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
+import com.crazerium.waymark.quest.Visibility;
 
 import cpw.mods.fml.relauncher.Side;
 import cpw.mods.fml.relauncher.SideOnly;
@@ -31,6 +32,8 @@ public enum QuestState {
     public static QuestState of(Quest quest) {
         TeamProgress progress = ClientQuests.getProgress();
         if (progress == null) return LOCKED;
+        Visibility visibility = quest.getVisibility();
+        if (visibility == Visibility.NEVER) return HIDDEN;
         if (progress.isCompleted(quest)) {
             UUID player = ClientQuests.playerId();
             for (Reward reward : quest.getRewards()) {
@@ -38,24 +41,26 @@ public enum QuestState {
             }
             return COMPLETED;
         }
-        if (!progress.isUnlocked(quest)) return quest.isHiddenUntilUnlocked() ? HIDDEN : LOCKED;
+        if (visibility == Visibility.COMPLETED) return HIDDEN;
+        if (!progress.isUnlocked(quest)) return visibility == Visibility.UNLOCKED ? HIDDEN : LOCKED;
         for (Task task : quest.getTasks()) {
             if (progress.getProgress(task) > 0) return IN_PROGRESS;
         }
         return AVAILABLE;
     }
 
-    /** Overall progress of a quest from 0 to 1, weighting every task equally. */
+    /** Overall progress of a quest from 0 to 1, weighting every non-optional task equally. */
     public static double fraction(Quest quest) {
         TeamProgress progress = ClientQuests.getProgress();
-        if (progress == null || quest.getTasks()
-            .isEmpty()) return 0;
+        if (progress == null) return 0;
         if (progress.isCompleted(quest)) return 1;
         double sum = 0;
+        int count = 0;
         for (Task task : quest.getTasks()) {
+            if (task.isOptional()) continue;
+            count++;
             sum += Math.min(1.0, (double) progress.getProgress(task) / task.getMaxProgress());
         }
-        return sum / quest.getTasks()
-            .size();
+        return count == 0 ? 0 : sum / count;
     }
 }

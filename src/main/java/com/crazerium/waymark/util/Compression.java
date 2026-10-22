@@ -10,27 +10,22 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
-import io.netty.buffer.ByteBuf;
-
 /** Gzipped strings for packets; quest JSON compresses roughly tenfold. */
 public final class Compression {
 
     private Compression() {}
 
-    public static void writeString(ByteBuf buf, String text) {
+    public static byte[] gzip(String text) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (OutputStream out = new GZIPOutputStream(bytes)) {
             out.write(text.getBytes(StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        buf.writeInt(bytes.size());
-        buf.writeBytes(bytes.toByteArray());
+        return bytes.toByteArray();
     }
 
-    public static String readString(ByteBuf buf) {
-        byte[] data = new byte[buf.readInt()];
-        buf.readBytes(data);
+    public static String gunzip(byte[] data) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         try (InputStream in = new GZIPInputStream(new ByteArrayInputStream(data))) {
             byte[] chunk = new byte[8192];

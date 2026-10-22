@@ -2,11 +2,15 @@ package com.crazerium.waymark.quest;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import net.minecraft.item.ItemStack;
 
 import com.crazerium.waymark.Waymark;
+import com.crazerium.waymark.quest.reward.UnknownReward;
+import com.crazerium.waymark.quest.task.UnknownTask;
 import com.crazerium.waymark.util.Ids;
 import com.crazerium.waymark.util.JsonUtil;
 import com.google.gson.JsonArray;
@@ -20,6 +24,8 @@ public class Quest extends QuestObject {
     private final List<Task> tasks = new ArrayList<>();
     private final List<Reward> rewards = new ArrayList<>();
     private final List<Long> dependencies = new ArrayList<>();
+    /** Dependencies that still count but whose line is not drawn, to keep busy maps readable. */
+    private final Set<Long> hiddenLines = new HashSet<>();
 
     private String title = "";
     private String subtitle = "";
@@ -27,9 +33,11 @@ public class Quest extends QuestObject {
     private ItemStack icon;
     private double x, y;
     private double size = 1.0;
-    private DependencyMode dependencyMode = DependencyMode.ALL;
-    private boolean hiddenUntilUnlocked;
+    private LogicMode dependencyMode = LogicMode.ALL;
+    private LogicMode taskMode = LogicMode.ALL;
+    private Visibility visibility = Visibility.ALWAYS;
     private boolean optional;
+    private boolean autoClaim;
 
     Quest(Chapter chapter, long id) {
         super(id);
@@ -111,20 +119,29 @@ public class Quest extends QuestObject {
         this.size = size;
     }
 
-    public DependencyMode getDependencyMode() {
+    public LogicMode getDependencyMode() {
         return dependencyMode;
     }
 
-    public void setDependencyMode(DependencyMode dependencyMode) {
+    public void setDependencyMode(LogicMode dependencyMode) {
         this.dependencyMode = dependencyMode;
     }
 
-    public boolean isHiddenUntilUnlocked() {
-        return hiddenUntilUnlocked;
+    /** How many of the non-optional tasks must be done. */
+    public LogicMode getTaskMode() {
+        return taskMode;
     }
 
-    public void setHiddenUntilUnlocked(boolean hiddenUntilUnlocked) {
-        this.hiddenUntilUnlocked = hiddenUntilUnlocked;
+    public void setTaskMode(LogicMode taskMode) {
+        this.taskMode = taskMode;
+    }
+
+    public Visibility getVisibility() {
+        return visibility;
+    }
+
+    public void setVisibility(Visibility visibility) {
+        this.visibility = visibility;
     }
 
     public boolean isOptional() {
@@ -133,6 +150,15 @@ public class Quest extends QuestObject {
 
     public void setOptional(boolean optional) {
         this.optional = optional;
+    }
+
+    /** Rewards are given automatically on completion (except ones where the player has to choose). */
+    public boolean isAutoClaim() {
+        return autoClaim;
+    }
+
+    public void setAutoClaim(boolean autoClaim) {
+        this.autoClaim = autoClaim;
     }
 
     /** Ids of quests this one depends on. Ids that point at deleted quests are kept and simply ignored. */
@@ -155,6 +181,16 @@ public class Quest extends QuestObject {
 
     public void removeDependency(Quest quest) {
         dependencies.remove(quest.getId());
+        hiddenLines.remove(quest.getId());
+    }
+
+    public boolean isLineHidden(Quest dependency) {
+        return hiddenLines.contains(dependency.getId());
+    }
+
+    public void setLineHidden(Quest dependency, boolean hidden) {
+        if (hidden) hiddenLines.add(dependency.getId());
+        else hiddenLines.remove(dependency.getId());
     }
 
     public List<Task> getTasks() {
@@ -201,10 +237,15 @@ public class Quest extends QuestObject {
             JsonArray deps = new JsonArray();
             for (long id : dependencies) deps.add(new JsonPrimitive(Ids.format(id)));
             json.add("dependencies", deps);
+            JsonArray hidden = new JsonArray();
+            for (long id : dependencies) if (hiddenLines.contains(id)) hidden.add(new JsonPrimitive(Ids.format(id)));
+            if (hidden.size() > 0) json.add("hidden_lines", hidden);
         }
-        if (dependencyMode != DependencyMode.ALL) json.addProperty("dependency_mode", dependencyMode.key());
-        if (hiddenUntilUnlocked) json.addProperty("hidden_until_unlocked", true);
+        if (dependencyMode != LogicMode.ALL) json.addProperty("dependency_mode", dependencyMode.key());
+        if (taskMode != LogicMode.ALL) json.addProperty("task_mode", taskMode.key());
+        if (visibility != Visibility.ALWAYS) json.addProperty("visibility", visibility.key());
         if (optional) json.addProperty("optional", true);
+        if (autoClaim) json.addProperty("auto_claim", true);
 
         JsonArray taskArray = new JsonArray();
         for (Task task : tasks) {
@@ -214,6 +255,9 @@ public class Quest extends QuestObject {
                 "type",
                 task.getType()
                     .getId());
+            if (!task.getCustomTitle()
+                .isEmpty()) t.addProperty("title", task.getCustomTitle());
+            if (task.isOptional()) t.addProperty("optional", true);
             task.writeJson(t);
             taskArray.add(t);
         }
@@ -246,19 +290,31 @@ public class Quest extends QuestObject {
             long id = Ids.parse(dep);
             if (id != Ids.NONE) dependencies.add(id);
         }
-        dependencyMode = DependencyMode.fromKey(JsonUtil.getString(json, "dependency_mode", "all"));
-        hiddenUntilUnlocked = JsonUtil.getBoolean(json, "hidden_until_unlocked", false);
+        for (String dep : JsonUtil.getStringList(json, "hidden_lines")) {
+            long id = Ids.parse(dep);
+            if (dependencies.contains(id)) hiddenLines.add(id);
+        }
+        dependencyMode = LogicMode.fromKey(JsonUtil.getString(json, "dependency_mode", "all"));
+        taskMode = LogicMode.fromKey(JsonUtil.getString(json, "task_mode", "all"));
+        visibility = Visibility.fromKey(JsonUtil.getString(json, "visibility", "always"));
         optional = JsonUtil.getBoolean(json, "optional", false);
+        autoClaim = JsonUtil.getBoolean(json, "auto_claim", false);
 
         for (JsonElement e : JsonUtil.getArray(json, "tasks")) {
             if (!e.isJsonObject()) continue;
             JsonObject t = e.getAsJsonObject();
-            TaskType<?> type = TaskType.get(JsonUtil.getString(t, "type", ""));
-            if (type == null) {
-                Waymark.LOG.error("{}: unknown task type '{}', task skipped", this, t.get("type"));
-                continue;
+            String typeId = JsonUtil.getString(t, "type", "");
+            TaskType<?> type = TaskType.get(typeId);
+            long id = getBook().claimId(t, "Task in " + this);
+            Task task;
+            if (type != null) {
+                task = type.create(this, id);
+            } else {
+                Waymark.LOG.warn("{}: unknown task type '{}', it is kept but does nothing", this, typeId);
+                task = new UnknownTask(this, id);
             }
-            Task task = type.create(this, getBook().claimId(t, "Task in " + this));
+            task.setCustomTitle(JsonUtil.getString(t, "title", ""));
+            task.setOptional(JsonUtil.getBoolean(t, "optional", false));
             tasks.add(task);
             getBook().register(task);
             task.readJson(t);
@@ -267,12 +323,16 @@ public class Quest extends QuestObject {
         for (JsonElement e : JsonUtil.getArray(json, "rewards")) {
             if (!e.isJsonObject()) continue;
             JsonObject r = e.getAsJsonObject();
-            RewardType<?> type = RewardType.get(JsonUtil.getString(r, "type", ""));
-            if (type == null) {
-                Waymark.LOG.error("{}: unknown reward type '{}', reward skipped", this, r.get("type"));
-                continue;
+            String typeId = JsonUtil.getString(r, "type", "");
+            RewardType<?> type = RewardType.get(typeId);
+            long id = getBook().claimId(r, "Reward in " + this);
+            Reward reward;
+            if (type != null) {
+                reward = type.create(this, id);
+            } else {
+                Waymark.LOG.warn("{}: unknown reward type '{}', it is kept but does nothing", this, typeId);
+                reward = new UnknownReward(this, id);
             }
-            Reward reward = type.create(this, getBook().claimId(r, "Reward in " + this));
             rewards.add(reward);
             getBook().register(reward);
             reward.readJson(r);

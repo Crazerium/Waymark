@@ -33,8 +33,8 @@ public abstract class Reward extends QuestObject {
         return null;
     }
 
-    /** Gives the reward to the player. Called on the server only. */
-    public abstract void claim(EntityPlayerMP player);
+    /** Gives the reward to the player. Called on the server only; {@code choice} is the option picked, if any. */
+    public abstract void claim(EntityPlayerMP player, int choice);
 
     /** Writes type-specific fields; "id" and "type" are written by the quest. */
     public void writeJson(JsonObject json) {}

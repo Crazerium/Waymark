@@ -54,7 +54,12 @@ public class ItemReward extends Reward {
     }
 
     @Override
-    public void claim(EntityPlayerMP player) {
+    public void claim(EntityPlayerMP player, int choice) {
+        give(player, item, count);
+    }
+
+    /** Gives {@code count} of the item, splitting it into stacks; what does not fit is dropped. */
+    public static void give(EntityPlayerMP player, ItemStack item, int count) {
         if (item == null) return;
         int remaining = count;
         while (remaining > 0) {

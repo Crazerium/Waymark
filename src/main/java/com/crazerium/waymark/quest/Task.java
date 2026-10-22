@@ -9,6 +9,8 @@ import com.google.gson.JsonObject;
 public abstract class Task extends QuestObject {
 
     private final Quest quest;
+    private String customTitle = "";
+    private boolean optional;
 
     protected Task(Quest quest, long id) {
         super(id);
@@ -34,8 +36,30 @@ public abstract class Task extends QuestObject {
         return null;
     }
 
-    /** Short text shown in the quest window, e.g. "16x Oak Wood". */
+    /** Default text shown in the quest window, e.g. "16x Oak Wood". */
     public abstract String getTitle();
+
+    /** The custom title if one is set, otherwise {@link #getTitle()}. */
+    public String getDisplayTitle() {
+        return customTitle.isEmpty() ? getTitle() : customTitle;
+    }
+
+    public String getCustomTitle() {
+        return customTitle;
+    }
+
+    public void setCustomTitle(String customTitle) {
+        this.customTitle = customTitle;
+    }
+
+    /** Optional tasks show progress but are not needed to complete the quest. */
+    public boolean isOptional() {
+        return optional;
+    }
+
+    public void setOptional(boolean optional) {
+        this.optional = optional;
+    }
 
     /** True if the quest window should show a submit button while the task can progress. */
     public boolean hasSubmitButton() {
@@ -57,7 +81,7 @@ public abstract class Task extends QuestObject {
         return progress;
     }
 
-    /** Writes type-specific fields; "id" and "type" are written by the quest. */
+    /** Writes type-specific fields; "id", "type", "title" and "optional" are written by the quest. */
     public void writeJson(JsonObject json) {}
 
     public void readJson(JsonObject json) {}

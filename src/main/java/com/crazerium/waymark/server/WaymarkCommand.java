@@ -1,5 +1,6 @@
 package com.crazerium.waymark.server;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -19,9 +20,12 @@ import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.util.Ids;
 
+import cpw.mods.fml.common.Loader;
+
 public class WaymarkCommand extends CommandBase {
 
-    private static final String[] SUBCOMMANDS = { "reload", "save", "info", "progress", "complete", "reset", "claim" };
+    private static final String[] SUBCOMMANDS = { "reload", "save", "info", "progress", "complete", "reset", "claim",
+        "import_bq" };
 
     @Override
     public String getCommandName() {
@@ -30,7 +34,7 @@ public class WaymarkCommand extends CommandBase {
 
     @Override
     public String getCommandUsage(ICommandSender sender) {
-        return "/waymark <reload|save|info|progress [player]|complete <quest id> [player]|reset [player]|claim [player]>";
+        return "/waymark <reload|save|info|progress [player]|complete <quest id> [player]|reset [player]|claim [player]|import_bq [confirm]>";
     }
 
     @Override
@@ -108,12 +112,31 @@ public class WaymarkCommand extends CommandBase {
                     for (Reward reward : quest.getRewards()) {
                         TeamProgress team = ServerProgress.get(player);
                         if (team.isCompleted(quest) && !team.isClaimed(player.getUniqueID(), reward)) {
-                            ServerProgress.claim(player, reward.getId());
+                            ServerProgress.claim(player, reward.getId(), 0);
                             claimed++;
                         }
                     }
                 }
                 reply(sender, "Claimed " + claimed + " rewards for " + player.getCommandSenderName());
+                break;
+            }
+            case "import_bq": {
+                File config = Loader.instance()
+                    .getConfigDir();
+                boolean apply = args.length > 1 && args[1].equals("confirm");
+                try {
+                    for (String line : BqImport
+                        .run(new File(config, "betterquesting/DefaultQuests"), new File(config, "waymark"), apply))
+                        reply(sender, line);
+                } catch (IOException e) {
+                    Waymark.LOG.error("BetterQuesting import failed", e);
+                    throw new CommandException("Import failed: " + e.getMessage());
+                }
+                if (apply) {
+                    ServerQuests.load();
+                    ServerProgress.syncAll();
+                    reply(sender, "Quests reloaded: " + describe(ServerQuests.get()));
+                }
                 break;
             }
             default:

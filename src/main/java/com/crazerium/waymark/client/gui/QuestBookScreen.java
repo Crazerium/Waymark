@@ -23,6 +23,7 @@ import com.crazerium.waymark.client.QuestState;
 import com.crazerium.waymark.quest.Chapter;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
+import com.crazerium.waymark.quest.QuestLink;
 import com.crazerium.waymark.quest.QuestObject;
 
 import cpw.mods.fml.relauncher.Side;
@@ -142,15 +143,49 @@ public class QuestBookScreen extends GuiScreen {
         if (chapter != null) savedViews.put(chapter.getId(), new double[] { panX, panY, zoom });
     }
 
+    /** Something drawn on the map: one of the chapter's quests, or a link to a quest from another chapter. */
+    private static final class Node {
+
+        final Quest quest;
+        final double x, y, size;
+        final boolean link;
+        final QuestState state;
+
+        Node(Quest quest, double x, double y, double size, boolean link) {
+            this.quest = quest;
+            this.x = x;
+            this.y = y;
+            this.size = size;
+            this.link = link;
+            this.state = QuestState.of(quest);
+        }
+    }
+
+    /** Visible nodes of the open chapter, quests first and links after. */
+    private List<Node> nodes() {
+        List<Node> nodes = new ArrayList<>();
+        if (chapter == null) return nodes;
+        for (Quest q : chapter.getQuests()) {
+            Node node = new Node(q, q.getX(), q.getY(), q.getSize(), false);
+            if (node.state != QuestState.HIDDEN) nodes.add(node);
+        }
+        for (QuestLink link : chapter.getLinks()) {
+            Quest q = link.getQuest();
+            if (q == null) continue;
+            Node node = new Node(q, link.getX(), link.getY(), link.getSize(), true);
+            if (node.state != QuestState.HIDDEN) nodes.add(node);
+        }
+        return nodes;
+    }
+
     private void centerView() {
         zoom = 1;
         double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
-        for (Quest q : chapter.getQuests()) {
-            if (QuestState.of(q) == QuestState.HIDDEN) continue;
-            minX = Math.min(minX, q.getX());
-            maxX = Math.max(maxX, q.getX());
-            minY = Math.min(minY, q.getY());
-            maxY = Math.max(maxY, q.getY());
+        for (Node n : nodes()) {
+            minX = Math.min(minX, n.x);
+            maxX = Math.max(maxX, n.x);
+            minY = Math.min(minY, n.y);
+            maxY = Math.max(maxY, n.y);
         }
         if (minX > maxX) {
             panX = panY = 0;
@@ -160,28 +195,31 @@ public class QuestBookScreen extends GuiScreen {
         panY = -(minY + maxY) / 2 * GRID;
     }
 
-    private double screenX(Quest q) {
-        return canvasX + canvasW / 2.0 + panX + q.getX() * GRID * zoom;
+    private double screenX(Node n) {
+        return canvasX + canvasW / 2.0 + panX + n.x * GRID * zoom;
     }
 
-    private double screenY(Quest q) {
-        return canvasY + canvasH / 2.0 + panY + q.getY() * GRID * zoom;
+    private double screenY(Node n) {
+        return canvasY + canvasH / 2.0 + panY + n.y * GRID * zoom;
     }
 
-    private int halfSize(Quest q) {
-        return Math.max(4, (int) Math.round(NODE * q.getSize() * zoom / 2));
+    private int halfSize(Node n) {
+        return Math.max(4, (int) Math.round(NODE * n.size * zoom / 2));
+    }
+
+    private Node nodeAt(List<Node> nodes, int mx, int my) {
+        if (!GuiUtil.inside(mx, my, canvasX, canvasY, canvasW, canvasH)) return null;
+        for (int i = nodes.size() - 1; i >= 0; i--) {
+            Node n = nodes.get(i);
+            int half = halfSize(n);
+            if (Math.abs(mx - screenX(n)) <= half && Math.abs(my - screenY(n)) <= half) return n;
+        }
+        return null;
     }
 
     private Quest questAt(int mx, int my) {
-        if (chapter == null || !GuiUtil.inside(mx, my, canvasX, canvasY, canvasW, canvasH)) return null;
-        List<Quest> quests = chapter.getQuests();
-        for (int i = quests.size() - 1; i >= 0; i--) {
-            Quest q = quests.get(i);
-            if (QuestState.of(q) == QuestState.HIDDEN) continue;
-            int half = halfSize(q);
-            if (Math.abs(mx - screenX(q)) <= half && Math.abs(my - screenY(q)) <= half) return q;
-        }
-        return null;
+        Node n = nodeAt(nodes(), mx, my);
+        return n != null ? n.quest : null;
     }
 
     @Override
@@ -225,6 +263,7 @@ public class QuestBookScreen extends GuiScreen {
 
         GuiUtil.scissor(listX + 1, listY + 1, LIST_WIDTH - 2, listH - 2);
         boolean mouseInList = GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH);
+        Chapter hoveredChapter = null;
         for (int i = 0; i < chapters.size(); i++) {
             int y = listY + 2 + i * ROW - listScroll;
             if (y + ROW < listY || y > listY + listH) continue;
@@ -243,8 +282,19 @@ public class QuestBookScreen extends GuiScreen {
                 y + 6,
                 selected ? 0xFFFFFF : 0xC0C0C0);
             if (hasClaimable(c)) GuiUtil.rect(listX + LIST_WIDTH - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
+            if (mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW)) hoveredChapter = c;
         }
         GuiUtil.endScissor();
+
+        if (hoveredChapter != null) {
+            List<String> lines = new ArrayList<>();
+            lines.add(GuiUtil.colorCodes(hoveredChapter.getTitle()));
+            for (String line : hoveredChapter.getDescription()) {
+                for (Object wrapped : fontRendererObj.listFormattedStringToWidth("§7" + GuiUtil.colorCodes(line), 220))
+                    lines.add((String) wrapped);
+            }
+            showTooltip(lines, mx, my);
+        }
     }
 
     private static ItemStack chapterIcon(Chapter c) {
@@ -277,31 +327,36 @@ public class QuestBookScreen extends GuiScreen {
 
         GuiUtil.scissor(canvasX + 1, canvasY + 1, canvasW - 2, canvasH - 2);
 
-        float lineWidth = (float) Math.max(1, 1.5 * zoom * GuiUtil.guiScale());
-        for (Quest q : chapter.getQuests()) {
-            if (QuestState.of(q) == QuestState.HIDDEN) continue;
-            for (Quest dep : q.getDependencies()) {
-                if (dep.getChapter() != chapter) continue;
-                QuestState depState = QuestState.of(dep);
-                if (depState == QuestState.HIDDEN) continue;
-                boolean done = depState == QuestState.COMPLETED || depState == QuestState.CLAIMABLE;
+        List<Node> nodes = nodes();
+        Map<Long, Node> byQuest = new HashMap<>();
+        for (Node n : nodes) byQuest.putIfAbsent(n.quest.getId(), n);
+
+        // Lines join whatever is on this map, so links pull in connections to other chapters' quests.
+        float lineWidth = (float) Math.max(1, 2 * zoom * GuiUtil.guiScale());
+        for (Node n : nodes) {
+            for (Quest dep : n.quest.getDependencies()) {
+                if (n.quest.isLineHidden(dep)) continue;
+                Node from = byQuest.get(dep.getId());
+                if (from == null) continue;
+                boolean done = from.state == QuestState.COMPLETED || from.state == QuestState.CLAIMABLE;
                 GuiUtil.line(
-                    screenX(dep),
-                    screenY(dep),
-                    screenX(q),
-                    screenY(q),
+                    screenX(from),
+                    screenY(from),
+                    screenX(n),
+                    screenY(n),
                     lineWidth,
-                    done ? 0xC055DD55 : 0xC0606070);
+                    done ? 0xC055DD55 : 0xC0905050);
             }
         }
 
-        Quest hovered = questAt(mx, my);
-        for (Quest q : chapter.getQuests()) {
-            QuestState state = QuestState.of(q);
-            if (state == QuestState.HIDDEN) continue;
-            int cx = (int) Math.round(screenX(q));
-            int cy = (int) Math.round(screenY(q));
-            int half = halfSize(q);
+        Node hoveredNode = nodeAt(nodes, mx, my);
+        Quest hovered = hoveredNode != null ? hoveredNode.quest : null;
+        for (Node n : nodes) {
+            Quest q = n.quest;
+            QuestState state = n.state;
+            int cx = (int) Math.round(screenX(n));
+            int cy = (int) Math.round(screenY(n));
+            int half = halfSize(n);
             if (cx + half < canvasX || cx - half > canvasX + canvasW
                 || cy + half < canvasY
                 || cy - half > canvasY + canvasH) continue;
@@ -312,7 +367,7 @@ public class QuestBookScreen extends GuiScreen {
                 float pulse = (float) (0.6 + 0.4 * Math.sin(System.currentTimeMillis() / 200.0));
                 border = 0xFF000000 | ((int) (0xFF * pulse) << 16) | ((int) (0xCC * pulse) << 8);
             }
-            GuiUtil.frame(cx - half, cy - half, half * 2, half * 2, q == hovered ? 0xFF303040 : 0xFF1A1A24, border);
+            GuiUtil.frame(cx - half, cy - half, half * 2, half * 2, n == hoveredNode ? 0xFF303040 : 0xFF1A1A24, border);
 
             ItemStack icon = q.getIcon();
             if (icon != null) {
@@ -332,10 +387,21 @@ public class QuestBookScreen extends GuiScreen {
                 int barW = (int) ((half * 2 - 2) * QuestState.fraction(q));
                 GuiUtil.rect(cx - half + 1, cy + half - 3, barW, 2, QuestState.IN_PROGRESS.color);
             }
+            // A link is marked with a small corner so players know the quest lives in another chapter.
+            if (n.link) GuiUtil.rect(cx + half - 5, cy - half + 1, 4, 4, 0xFF55AAFF);
         }
         GuiUtil.endScissor();
 
-        if (hovered != null) showTooltip(questTooltip(hovered), mx, my);
+        if (hovered != null) {
+            List<String> lines = questTooltip(hovered);
+            if (hoveredNode.link) lines.add(
+                "§b" + I18n.format(
+                    "waymark.gui.linked_from",
+                    GuiUtil.colorCodes(
+                        hovered.getChapter()
+                            .getTitle())));
+            showTooltip(lines, mx, my);
+        }
     }
 
     private List<String> questTooltip(Quest q) {

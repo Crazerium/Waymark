@@ -3,6 +3,7 @@ package com.crazerium.waymark;
 import net.minecraftforge.common.DimensionManager;
 import net.minecraftforge.common.MinecraftForge;
 
+import com.crazerium.waymark.item.ItemMissing;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.server.ServerEvents;
@@ -17,11 +18,14 @@ import cpw.mods.fml.common.event.FMLPreInitializationEvent;
 import cpw.mods.fml.common.event.FMLServerStartingEvent;
 import cpw.mods.fml.common.event.FMLServerStoppedEvent;
 import cpw.mods.fml.common.event.FMLServerStoppingEvent;
+import cpw.mods.fml.common.registry.GameRegistry;
 
 public class CommonProxy {
 
     public void preInit(FMLPreInitializationEvent event) {
         Waymark.LOG.info("{} {} loading", Waymark.NAME, Tags.VERSION);
+        ItemMissing.INSTANCE = new ItemMissing();
+        GameRegistry.registerItem(ItemMissing.INSTANCE, "missing");
         BuiltinTypes.init();
         WaymarkNetwork.init();
         ServerQuests.init(event.getModConfigurationDirectory());
