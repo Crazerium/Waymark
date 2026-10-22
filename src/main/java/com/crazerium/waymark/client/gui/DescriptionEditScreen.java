@@ -87,6 +87,11 @@ public class DescriptionEditScreen extends GuiScreen {
         GuiUtil.button(fontRendererObj, bx, py + 4, 16, 14, "", mx, my);
         for (int i = 0; i < 4; i++)
             GuiUtil.rect(bx + 3 + (i % 2) * 5, py + 6 + (i / 2) * 5, 4, 4, 0xFF000000 | COLOR_RGB[9 + i * 2]);
+        // Page break and image insert whole lines.
+        GuiUtil.button(fontRendererObj, bx + 26, py + 4, 16, 14, "§7⇣", mx, my);
+        GuiUtil.button(fontRendererObj, bx + 44, py + 4, 16, 14, "§b▣", mx, my);
+        String tip = GuiUtil.inside(mx, my, bx + 26, py + 4, 16, 14) ? "waymark.edit.insert_page_break"
+            : GuiUtil.inside(mx, my, bx + 44, py + 4, 16, 14) ? "waymark.edit.insert_image" : null;
         GuiUtil.button(fontRendererObj, px + pw - 20, py + 4, 16, 14, "§cx", mx, my);
 
         area.draw();
@@ -101,6 +106,8 @@ public class DescriptionEditScreen extends GuiScreen {
             }
         }
         super.drawScreen(mx, my, partialTicks);
+        if (tip != null && !palette)
+            drawHoveringText(java.util.Collections.singletonList(I18n.format(tip)), mx, my, fontRendererObj);
     }
 
     private int paletteX() {
@@ -139,6 +146,14 @@ public class DescriptionEditScreen extends GuiScreen {
         }
         if (GuiUtil.inside(mx, my, bx, py + 4, 16, 14)) {
             palette = true;
+            return;
+        }
+        if (GuiUtil.inside(mx, my, bx + 26, py + 4, 16, 14)) {
+            area.insertLine(DescriptionPages.PAGE_BREAK);
+            return;
+        }
+        if (GuiUtil.inside(mx, my, bx + 44, py + 4, 16, 14)) {
+            mc.displayGuiScreen(new ImagePickerScreen(this, line -> area.insertLine(line)));
             return;
         }
         area.mouseClicked(mx, my, button);

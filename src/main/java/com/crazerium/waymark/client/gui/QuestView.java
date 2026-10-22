@@ -65,6 +65,8 @@ class QuestView {
     private final List<Area> choiceAreas = new ArrayList<>();
     private int x, y, w, h;
     private int scroll, contentHeight, viewTop, viewBottom;
+    /** The description page being shown. */
+    private int page;
     /** A choice reward whose options are shown for the player to pick from. */
     private ChoiceReward choosing;
 
@@ -141,7 +143,10 @@ class QuestView {
 
         // Scrolling part: state lines and the description.
         viewTop = cy;
-        viewBottom = y + h - 4;
+        List<List<String>> pages = DescriptionPages.pages(quest.getDescription());
+        page = Math.max(0, Math.min(page, pages.size() - 1));
+        // With several pages the bottom row holds the page arrows.
+        viewBottom = y + h - (pages.size() > 1 ? 20 : 4);
         scroll = Math.max(0, Math.min(scroll, contentHeight - (viewBottom - viewTop)));
         int left = x + 8, inner = w - 16;
         int ty = viewTop - scroll;
@@ -165,7 +170,12 @@ class QuestView {
             }
             ty += 2;
         }
-        for (String paragraph : quest.getDescription()) {
+        for (String paragraph : pages.get(page)) {
+            DescriptionPages.Image image = DescriptionPages.image(paragraph);
+            if (image != null) {
+                ty += image.draw(left, ty, inner) + 4;
+                continue;
+            }
             if (paragraph.isEmpty()) {
                 ty += 6;
                 continue;
@@ -177,6 +187,7 @@ class QuestView {
         }
         GuiUtil.endScissor();
         contentHeight = ty + scroll - viewTop;
+        if (pages.size() > 1) drawPageArrows(font, pages.size(), mx, my);
         int viewHeight = viewBottom - viewTop;
         if (contentHeight > viewHeight && viewHeight > 0) {
             int barH = Math.max(10, viewHeight * viewHeight / contentHeight);
@@ -185,6 +196,26 @@ class QuestView {
         }
 
         if (choosing != null) drawChoices(font, mx, my);
+    }
+
+    private void drawPageArrows(FontRenderer font, int count, int mx, int my) {
+        int by = y + h - 17;
+        String label = (page + 1) + " / " + count;
+        font.drawString(label, x + (w - font.getStringWidth(label)) / 2, by + 3, 0xC0C0C0);
+        int lx = x + w / 2 - 40, rx = x + w / 2 + 26;
+        if (page > 0) {
+            GuiUtil.button(font, lx, by, 14, 13, "◂", mx, my);
+            areas.add(new Area(lx, by, 14, 13, () -> turnPage(-1), null));
+        }
+        if (page < count - 1) {
+            GuiUtil.button(font, rx, by, 14, 13, "▸", mx, my);
+            areas.add(new Area(rx, by, 14, 13, () -> turnPage(1), null));
+        }
+    }
+
+    private void turnPage(int direction) {
+        page += direction;
+        scroll = 0;
     }
 
     /** Lays icons out in centred rows inside a column; returns the y below the last row. */

@@ -60,6 +60,18 @@ class TextArea {
         return focus >= 0;
     }
 
+    /** Adds a whole line below the one being edited (or at the end) and puts the cursor at its end. */
+    void insertLine(String text) {
+        sync();
+        int index = focus >= 0 ? focus + 1 : lines.size();
+        lines.add(index, text);
+        focus = index;
+        cursor = text.length();
+        if (focus < first) first = focus;
+        if (focus >= first + fields.length) first = focus - fields.length + 1;
+        rebind();
+    }
+
     /** Types text at the cursor of the line being edited, e.g. a formatting code from a toolbar button. */
     void insert(String text) {
         if (focus < first || focus >= first + fields.length) return;

@@ -10,6 +10,7 @@ import com.crazerium.waymark.item.ItemQuestBook;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.quest.BuiltinTypes;
 import com.crazerium.waymark.server.ServerEvents;
+import com.crazerium.waymark.server.ServerImages;
 import com.crazerium.waymark.server.ServerProgress;
 import com.crazerium.waymark.server.ServerQuests;
 import com.crazerium.waymark.server.WaymarkCommand;
@@ -34,6 +35,7 @@ public class CommonProxy {
         BuiltinTypes.init();
         WaymarkNetwork.init();
         ServerQuests.init(event.getModConfigurationDirectory());
+        ServerImages.init(event.getModConfigurationDirectory());
     }
 
     public void init(FMLInitializationEvent event) {

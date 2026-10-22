@@ -136,6 +136,7 @@ public final class ServerProgress {
         for (MessageBlob part : MessageBlob.split(MessageBlob.BOOK, ServerQuests.syncData()))
             WaymarkNetwork.CHANNEL.sendTo(part, player);
         WaymarkNetwork.CHANNEL.sendTo(new MessageCanEdit(ServerEditor.canEdit(player)), player);
+        ServerImages.sendIndex(player);
         checkTeamChange(player);
         TeamProgress team = get(player);
         sendProgress(player, team);
