@@ -114,6 +114,15 @@ public class QuestBookScreen extends GuiScreen {
         questView = new QuestView(this, quest);
     }
 
+    static boolean isEditing() {
+        return editMode && ClientQuests.canEdit();
+    }
+
+    void editQuest(Quest quest) {
+        questView = null;
+        mc.displayGuiScreen(new QuestEditScreen(this, quest));
+    }
+
     void closeQuest() {
         questView = null;
     }
@@ -596,6 +605,7 @@ public class QuestBookScreen extends GuiScreen {
                 () -> ClientQuests.sendEdit(BookEdits.deleteLink(chapter, index)));
         } else {
             Quest quest = node.quest;
+            menu.add(I18n.format("waymark.edit.edit_quest"), () -> editQuest(quest));
             menu.addDangerous(
                 I18n.format("waymark.edit.delete_quest"),
                 I18n.format("waymark.edit.confirm"),

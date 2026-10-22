@@ -25,6 +25,7 @@ public final class BookEdits {
     public static final String DELETE_QUEST = "delete_quest";
     public static final String DELETE_LINK = "delete_link";
     public static final String TOGGLE_DEPENDENCY = "toggle_dependency";
+    public static final String UPDATE_QUEST = "update_quest";
 
     private BookEdits() {}
 
@@ -72,6 +73,17 @@ public final class BookEdits {
         JsonObject op = op(TOGGLE_DEPENDENCY);
         op.addProperty("quest", Ids.format(quest.getId()));
         op.addProperty("dependency", Ids.format(dependency.getId()));
+        return op;
+    }
+
+    /**
+     * Replaces a quest's properties, tasks and rewards with {@code data} (quest JSON from the editor). The server
+     * gives tasks and rewards without a usable id a new one before applying.
+     */
+    public static JsonObject updateQuest(Quest quest, JsonObject data) {
+        JsonObject op = op(UPDATE_QUEST);
+        op.addProperty("quest", Ids.format(quest.getId()));
+        op.add("data", data);
         return op;
     }
 
@@ -143,6 +155,14 @@ public final class BookEdits {
                         throw new IllegalArgumentException("That would make a dependency loop");
                     quest.addDependency(dependency);
                 }
+                changed.add(quest.getChapter());
+                break;
+            }
+            case UPDATE_QUEST: {
+                Quest quest = quest(book, op, "quest");
+                JsonObject data = JsonUtil.getObject(op, "data");
+                if (data == null) throw new IllegalArgumentException("No quest data");
+                quest.reload(data);
                 changed.add(quest.getChapter());
                 break;
             }

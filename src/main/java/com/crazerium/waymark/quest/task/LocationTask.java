@@ -1,5 +1,8 @@
 package com.crazerium.waymark.quest.task;
 
+import java.util.Arrays;
+import java.util.List;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
@@ -7,6 +10,7 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.TaskType;
@@ -31,6 +35,17 @@ public class LocationTask extends Task {
     @Override
     public TaskType<?> getType() {
         return BuiltinTypes.LOCATION_TASK;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(
+            EditorField.integer("dimension", 0),
+            EditorField.integer("x", 0),
+            EditorField.integer("y", 0),
+            EditorField.integer("z", 0),
+            EditorField.integer("range", -1),
+            EditorField.integer("biome", -1));
     }
 
     public int getDimension() {

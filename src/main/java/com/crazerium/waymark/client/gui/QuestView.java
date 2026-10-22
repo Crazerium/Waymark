@@ -77,6 +77,11 @@ class QuestView {
         int closeX = x + w - 16, closeY = y + 5;
         GuiUtil.button(font, closeX, closeY, 12, 12, "x", mx, my);
         areas.add(new Area(closeX, closeY, 12, 12, screen::closeQuest));
+        if (QuestBookScreen.isEditing()) {
+            int editX = closeX - 16;
+            GuiUtil.button(font, editX, closeY, 12, 12, "✎", mx, my);
+            areas.add(new Area(editX, closeY, 12, 12, () -> screen.editQuest(quest)));
+        }
 
         viewTop = y + 22;
         viewBottom = y + h - 6;

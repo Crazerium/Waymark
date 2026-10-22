@@ -1,5 +1,8 @@
 package com.crazerium.waymark.quest.task;
 
+import java.util.Arrays;
+import java.util.List;
+
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityList;
 import net.minecraft.init.Items;
@@ -7,6 +10,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.TaskType;
@@ -27,6 +31,14 @@ public class KillTask extends Task {
     @Override
     public TaskType<?> getType() {
         return BuiltinTypes.KILL_TASK;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(
+            EditorField.text("entity", "Zombie"),
+            EditorField.integer("count", 1),
+            EditorField.bool("subtypes", false));
     }
 
     public String getEntity() {

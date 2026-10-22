@@ -1,9 +1,13 @@
 package com.crazerium.waymark.quest.task;
 
+import java.util.Arrays;
+import java.util.List;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.TaskType;
@@ -24,6 +28,17 @@ public class ItemTask extends Task {
     @Override
     public TaskType<?> getType() {
         return BuiltinTypes.ITEM_TASK;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(
+            EditorField.item("item"),
+            EditorField.itemList("alternatives"),
+            EditorField.text("ore_dict", ""),
+            EditorField.integer("count", 1),
+            EditorField.bool("consume", true),
+            EditorField.bool("match_nbt", false));
     }
 
     public ItemFilter getFilter() {

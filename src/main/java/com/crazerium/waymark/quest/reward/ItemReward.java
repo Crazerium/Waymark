@@ -1,9 +1,13 @@
 package com.crazerium.waymark.quest.reward;
 
+import java.util.Arrays;
+import java.util.List;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.RewardType;
@@ -23,6 +27,11 @@ public class ItemReward extends Reward {
     @Override
     public RewardType<?> getType() {
         return BuiltinTypes.ITEM_REWARD;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(EditorField.item("item"), EditorField.integer("count", 1));
     }
 
     public ItemStack getItem() {

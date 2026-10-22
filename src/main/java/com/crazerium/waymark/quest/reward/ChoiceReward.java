@@ -1,6 +1,7 @@
 package com.crazerium.waymark.quest.reward;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -9,6 +10,7 @@ import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.RewardType;
@@ -29,6 +31,11 @@ public class ChoiceReward extends Reward {
     @Override
     public RewardType<?> getType() {
         return BuiltinTypes.CHOICE_REWARD;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(EditorField.itemList("choices"));
     }
 
     public List<ItemStack> getChoices() {

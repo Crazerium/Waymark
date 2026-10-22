@@ -3,7 +3,10 @@ package com.crazerium.waymark.quest;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+
+import com.google.gson.JsonObject;
 
 /** A kind of task, identified in files by its string id. Other mods can register their own. */
 public final class TaskType<T extends Task> {
@@ -41,6 +44,22 @@ public final class TaskType<T extends Task> {
 
     public static Collection<TaskType<?>> all() {
         return Collections.unmodifiableCollection(REGISTRY.values());
+    }
+
+    /** The fields the editor shows for this type. */
+    public List<EditorField> editorFields() {
+        return factory.create(null, 0)
+            .editorFields();
+    }
+
+    /**
+     * A detached Task built from editor JSON, only for showing its title and icon in the editor. It belongs to no
+     * quest, so anything that needs the quest book must not be called on it.
+     */
+    public T preview(JsonObject json) {
+        T obj = factory.create(null, 0);
+        obj.readJson(json);
+        return obj;
     }
 
     public String getId() {

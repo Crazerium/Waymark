@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import net.minecraft.item.ItemStack;
@@ -282,6 +283,28 @@ public class Quest extends QuestObject {
         }
         if (rewardArray.size() > 0) json.add("rewards", rewardArray);
         return json;
+    }
+
+    /**
+     * Replaces everything about this quest with {@code json}, as written by the quest editor. Position and
+     * dependencies are kept, since the map editor owns those. Tasks and rewards that keep their ids keep progress.
+     */
+    void reload(JsonObject json) {
+        JsonObject data = new JsonObject();
+        for (Map.Entry<String, JsonElement> e : json.entrySet()) data.add(e.getKey(), e.getValue());
+        JsonObject current = toJson();
+        for (String key : new String[] { "x", "y", "dependencies", "hidden_lines" }) {
+            data.remove(key);
+            if (current.has(key)) data.add(key, current.get(key));
+        }
+        for (Task task : tasks) getBook().unregister(task);
+        for (Reward reward : rewards) getBook().unregister(reward);
+        tasks.clear();
+        rewards.clear();
+        dependencies.clear();
+        hiddenLines.clear();
+        icon = null;
+        readJson(data);
     }
 
     void readJson(JsonObject json) {

@@ -1,11 +1,15 @@
 package com.crazerium.waymark.quest.reward;
 
+import java.util.Arrays;
+import java.util.List;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.init.Items;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.StatCollector;
 
 import com.crazerium.waymark.quest.BuiltinTypes;
+import com.crazerium.waymark.quest.EditorField;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.RewardType;
@@ -26,6 +30,11 @@ public class CompleteQuestReward extends Reward {
     @Override
     public RewardType<?> getType() {
         return BuiltinTypes.COMPLETE_QUEST_REWARD;
+    }
+
+    @Override
+    public List<EditorField> editorFields() {
+        return Arrays.asList(EditorField.text("quest", ""));
     }
 
     public Quest getTarget() {

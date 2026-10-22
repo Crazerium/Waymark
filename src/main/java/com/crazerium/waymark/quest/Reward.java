@@ -1,5 +1,8 @@
 package com.crazerium.waymark.quest;
 
+import java.util.Collections;
+import java.util.List;
+
 import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 
@@ -40,4 +43,9 @@ public abstract class Reward extends QuestObject {
     public void writeJson(JsonObject json) {}
 
     public void readJson(JsonObject json) {}
+
+    /** Fields the in-game editor shows for this type; base fields like the task title are added by the editor. */
+    public List<EditorField> editorFields() {
+        return Collections.emptyList();
+    }
 }
