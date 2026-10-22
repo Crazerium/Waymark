@@ -81,6 +81,11 @@ public class QuestBookScreen extends GuiScreen {
     private Node dragNode;
     private int dragStartX, dragStartY, lastMouseX, lastMouseY;
     private ContextMenu menu;
+    private QuestBook cachedBook;
+    private TeamProgress cachedProgress;
+    private int cachedBookVersion = -1, cachedProgressVersion = -1;
+    private final java.util.Set<Chapter> claimableChapters = new java.util.HashSet<>();
+    private boolean anyClaimable;
     private TextPrompt prompt;
     /** Edit mode: index of the chapter being dragged in the list. */
     private int dragChapter;
@@ -339,6 +344,7 @@ public class QuestBookScreen extends GuiScreen {
             return;
         }
         refresh(book);
+        refreshClaimCache(book);
         // An edit from the server (maybe another operator's) may have deleted the open quest.
         if (questView != null && book.getQuest(questView.quest.getId()) != questView.quest) questView = null;
         if (!ClientQuests.canEdit()) editMode = false;
@@ -427,7 +433,7 @@ public class QuestBookScreen extends GuiScreen {
             right = editButtonX - 4;
         }
         claimAllW = 0;
-        if (!editMode && !claimableRewards(book).isEmpty()) {
+        if (!editMode && anyClaimable) {
             String label = "§e" + I18n.format("waymark.gui.claim_all");
             claimAllW = fontRendererObj.getStringWidth(label) + 12;
             claimAllX = right - claimAllW;
@@ -526,7 +532,7 @@ public class QuestBookScreen extends GuiScreen {
                 listX + 22,
                 y + 6,
                 selected ? 0xFFFFFF : 0xC0C0C0);
-            if (hasClaimable(c)) GuiUtil.rect(listX + listW - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
+            if (claimableChapters.contains(c)) GuiUtil.rect(listX + listW - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
             boolean rowHovered = mouseInList && GuiUtil.inside(mx, my, listX, y, listW, ROW);
             // A quest being dragged over a chapter shows where it will go.
             if (drag == Drag.MOVE && dragMoved && rowHovered && c != chapter)
@@ -556,6 +562,25 @@ public class QuestBookScreen extends GuiScreen {
             if (icon != null) return icon;
         }
         return null;
+    }
+
+    /**
+     * Which chapters have rewards waiting, and whether any reward can be claimed at all. Scanning the whole book
+     * every frame is slow for a big pack, so this is only redone when the book or the progress changes.
+     */
+    private void refreshClaimCache(QuestBook book) {
+        TeamProgress progress = ClientQuests.getProgress();
+        int progressVersion = progress != null ? progress.getVersion() : -1;
+        if (book == cachedBook && book.getVersion() == cachedBookVersion
+            && progress == cachedProgress
+            && progressVersion == cachedProgressVersion) return;
+        cachedBook = book;
+        cachedBookVersion = book.getVersion();
+        cachedProgress = progress;
+        cachedProgressVersion = progressVersion;
+        claimableChapters.clear();
+        for (Chapter c : book.getChapters()) if (hasClaimable(c)) claimableChapters.add(c);
+        anyClaimable = !claimableRewards(book).isEmpty();
     }
 
     private static boolean hasClaimable(Chapter c) {

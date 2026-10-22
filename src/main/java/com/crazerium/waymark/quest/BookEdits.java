@@ -295,6 +295,7 @@ public final class BookEdits {
             default:
                 throw new IllegalArgumentException("Unknown edit '" + name + "'");
         }
+        book.markChanged();
         return changed;
     }
 

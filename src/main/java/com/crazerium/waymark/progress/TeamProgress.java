@@ -31,6 +31,8 @@ public class TeamProgress {
     /** How many times each quest was completed; repeatable quests count up, others stay at 1. */
     private final Map<Long, Integer> times = new HashMap<>();
     private boolean dirty;
+    /** Changes with every change of progress, so the client can cache what it computes from it. */
+    private int version;
 
     public TeamProgress(UUID id) {
         this.id = id;
@@ -48,7 +50,7 @@ public class TeamProgress {
     public void setProgress(long taskId, long value) {
         if (value <= 0) taskProgress.remove(taskId);
         else taskProgress.put(taskId, value);
-        dirty = true;
+        markDirty();
     }
 
     public boolean isComplete(Task task) {
@@ -62,7 +64,7 @@ public class TeamProgress {
     public void setCompleted(long questId, long time) {
         completed.put(questId, time);
         times.merge(questId, 1, Integer::sum);
-        dirty = true;
+        markDirty();
     }
 
     /** When the quest was completed (epoch millis), or -1 if it is not completed right now. */
@@ -86,7 +88,7 @@ public class TeamProgress {
         completed.remove(quest.getId());
         for (Task task : quest.getTasks()) taskProgress.remove(task.getId());
         for (Set<Long> set : claimed.values()) for (Reward reward : quest.getRewards()) set.remove(reward.getId());
-        dirty = true;
+        markDirty();
     }
 
     public int getCompletedCount() {
@@ -141,7 +143,7 @@ public class TeamProgress {
     public void setClaimed(UUID player, Reward reward) {
         claimed.computeIfAbsent(claimKey(player, reward), k -> new HashSet<>())
             .add(reward.getId());
-        dirty = true;
+        markDirty();
     }
 
     /**
@@ -156,7 +158,7 @@ public class TeamProgress {
         for (Map.Entry<UUID, Set<Long>> e : other.claimed.entrySet())
             claimed.computeIfAbsent(e.getKey(), k -> new HashSet<>())
                 .addAll(e.getValue());
-        dirty = true;
+        markDirty();
     }
 
     public void reset() {
@@ -164,7 +166,16 @@ public class TeamProgress {
         completed.clear();
         claimed.clear();
         times.clear();
+        markDirty();
+    }
+
+    private void markDirty() {
         dirty = true;
+        version++;
+    }
+
+    public int getVersion() {
+        return version;
     }
 
     public boolean isDirty() {
@@ -233,6 +244,7 @@ public class TeamProgress {
                 claimed.put(player, set);
             }
         }
+        version++;
         dirty = false;
     }
 

@@ -20,6 +20,8 @@ public class QuestBook {
     private final List<Chapter> chapters = new ArrayList<>();
     private final Map<Long, QuestObject> objects = new HashMap<>();
     private final Random random = new Random();
+    /** Changes whenever quests, their dependencies or the chapter list change, so caches know to rebuild. */
+    private int version;
 
     public List<Chapter> getChapters() {
         return Collections.unmodifiableList(chapters);
@@ -77,10 +79,12 @@ public class QuestBook {
     }
 
     void register(QuestObject object) {
+        version++;
         objects.put(object.getId(), object);
     }
 
     void unregister(QuestObject object) {
+        version++;
         objects.remove(object.getId());
     }
 
@@ -100,6 +104,15 @@ public class QuestBook {
         if (!chapters.remove(chapter)) return;
         for (Quest quest : new ArrayList<>(chapter.getQuests())) chapter.removeQuest(quest);
         unregister(chapter);
+    }
+
+    public int getVersion() {
+        return version;
+    }
+
+    /** Tells caches that the book changed in a way registering objects does not cover (e.g. dependencies). */
+    public void markChanged() {
+        version++;
     }
 
     /** Moves a chapter to a new position in the book, clamped to the valid range. */

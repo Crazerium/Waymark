@@ -3,16 +3,21 @@ package com.crazerium.waymark.server;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
+import net.minecraftforge.oredict.OreDictionary;
 
 import com.crazerium.waymark.io.ProgressStorage;
 import com.crazerium.waymark.network.MessageBlob;
@@ -30,6 +35,8 @@ import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
 import com.crazerium.waymark.quest.reward.ChoiceReward;
 import com.crazerium.waymark.quest.task.CraftTask;
+import com.crazerium.waymark.quest.task.ItemFilter;
+import com.crazerium.waymark.quest.task.ItemTask;
 import com.crazerium.waymark.quest.task.KillTask;
 
 import cpw.mods.fml.common.network.simpleimpl.IMessage;
@@ -39,7 +46,13 @@ public final class ServerProgress {
 
     private static ProgressStorage storage;
     private static final Map<UUID, TeamProgress> teams = new HashMap<>();
+    /** Auto-detected tasks other than "have items", which are indexed below instead. */
     private static final List<Task> autoDetectedTasks = new ArrayList<>();
+    /** "Have items" tasks by the item they want, and by ore dictionary id, so only plausible ones are checked. */
+    private static final Map<Item, List<ItemTask>> heldByItem = new HashMap<>();
+    private static final Map<Integer, List<ItemTask>> heldByOre = new HashMap<>();
+    /** Quest id to the quests that depend on it. */
+    private static final Map<Long, List<Quest>> dependents = new HashMap<>();
     private static final List<CraftTask> craftTasks = new ArrayList<>();
     private static final List<KillTask> killTasks = new ArrayList<>();
     private static final List<Quest> repeatableQuests = new ArrayList<>();
@@ -65,13 +78,19 @@ public final class ServerProgress {
 
     public static void onBookLoaded(QuestBook book) {
         autoDetectedTasks.clear();
+        heldByItem.clear();
+        heldByOre.clear();
+        dependents.clear();
         craftTasks.clear();
         repeatableQuests.clear();
         killTasks.clear();
         for (Quest quest : book.getAllQuests()) {
             if (quest.isRepeatable()) repeatableQuests.add(quest);
+            for (Quest dep : quest.getDependencies()) dependents.computeIfAbsent(dep.getId(), k -> new ArrayList<>())
+                .add(quest);
             for (Task task : quest.getTasks()) {
-                if (task.isAutoDetected()) autoDetectedTasks.add(task);
+                if (task instanceof ItemTask && task.isAutoDetected()) indexHeldItemTask((ItemTask) task);
+                else if (task.isAutoDetected()) autoDetectedTasks.add(task);
                 if (task instanceof CraftTask) craftTasks.add((CraftTask) task);
                 if (task instanceof KillTask) killTasks.add((KillTask) task);
             }
@@ -151,6 +170,7 @@ public final class ServerProgress {
         checkTeamChange(player);
         TeamProgress team = get(player);
         checkRepeats(team, player);
+        detectHeldItems(team, player);
         for (Task task : autoDetectedTasks) {
             if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
             setProgress(team, task, task.detect(player, team.getProgress(task)));
@@ -174,6 +194,47 @@ public final class ServerProgress {
             team.resetQuest(quest);
             sendToTeam(team, new MessageQuestReset(quest.getId()));
             checkQuest(team, quest);
+        }
+    }
+
+    private static void indexHeldItemTask(ItemTask task) {
+        ItemFilter filter = task.getFilter();
+        if (!filter.getOreDict()
+            .isEmpty()) {
+            heldByOre.computeIfAbsent(OreDictionary.getOreID(filter.getOreDict()), k -> new ArrayList<>())
+                .add(task);
+            return;
+        }
+        for (ItemStack stack : filter.getItems()) heldByItem.computeIfAbsent(stack.getItem(), k -> new ArrayList<>())
+            .add(task);
+    }
+
+    /**
+     * Counts the player's items for "have items" tasks. Instead of testing every such task against every slot, each
+     * stack only looks up the tasks that want its item or one of its ore names.
+     */
+    private static void detectHeldItems(TeamProgress team, EntityPlayerMP player) {
+        Map<ItemTask, Long> found = new HashMap<>();
+        Set<ItemTask> candidates = new HashSet<>();
+        for (ItemStack stack : player.inventory.mainInventory) {
+            if (stack == null || stack.getItem() == null) continue;
+            candidates.clear();
+            List<ItemTask> byItem = heldByItem.get(stack.getItem());
+            if (byItem != null) candidates.addAll(byItem);
+            if (!heldByOre.isEmpty()) for (int ore : OreDictionary.getOreIDs(stack)) {
+                List<ItemTask> byOre = heldByOre.get(ore);
+                if (byOre != null) candidates.addAll(byOre);
+            }
+            for (ItemTask task : candidates) {
+                if (task.getFilter()
+                    .matches(stack)) found.merge(task, (long) stack.stackSize, Long::sum);
+            }
+        }
+        for (Map.Entry<ItemTask, Long> e : found.entrySet()) {
+            ItemTask task = e.getKey();
+            if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
+            long progress = team.getProgress(task);
+            setProgress(team, task, Math.max(progress, Math.min(e.getValue(), task.getCount())));
         }
     }
 
@@ -262,8 +323,8 @@ public final class ServerProgress {
         }
 
         // Quests whose tasks are all optional complete as soon as they unlock, so completion can cascade.
-        for (Quest dependent : quest.getBook()
-            .getDependents(quest)) checkQuest(team, dependent);
+        for (Quest dependent : dependents.getOrDefault(quest.getId(), Collections.emptyList()))
+            checkQuest(team, dependent);
     }
 
     private static void sendToTeam(TeamProgress team, IMessage message) {

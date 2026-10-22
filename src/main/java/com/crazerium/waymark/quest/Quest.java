@@ -25,6 +25,8 @@ public class Quest extends QuestObject {
     private final List<Task> tasks = new ArrayList<>();
     private final List<Reward> rewards = new ArrayList<>();
     private final List<Long> dependencies = new ArrayList<>();
+    private List<Quest> cachedDependencies;
+    private int cachedVersion;
     /** Dependencies that still count but whose line is not drawn, to keep busy maps readable. */
     private final Set<Long> hiddenLines = new HashSet<>();
 
@@ -190,26 +192,35 @@ public class Quest extends QuestObject {
         return Collections.unmodifiableList(dependencies);
     }
 
+    /** Dependency quests that exist, cached until the book changes (this is called for every quest, often). */
     public List<Quest> getDependencies() {
-        List<Quest> list = new ArrayList<>();
-        for (long id : dependencies) {
-            Quest quest = getBook().getQuest(id);
-            if (quest != null) list.add(quest);
+        QuestBook book = getBook();
+        if (cachedDependencies == null || cachedVersion != book.getVersion()) {
+            List<Quest> list = new ArrayList<>();
+            for (long id : dependencies) {
+                Quest quest = book.getQuest(id);
+                if (quest != null) list.add(quest);
+            }
+            cachedDependencies = Collections.unmodifiableList(list);
+            cachedVersion = book.getVersion();
         }
-        return list;
+        return cachedDependencies;
     }
 
     public void addDependency(Quest quest) {
+        getBook().markChanged();
         if (quest != this && !dependencies.contains(quest.getId())) dependencies.add(quest.getId());
     }
 
     /** Removes a dependency by id, also one that points at a deleted quest. Returns true if it was there. */
     boolean removeDependencyId(long id) {
+        getBook().markChanged();
         hiddenLines.remove(id);
         return dependencies.remove(Long.valueOf(id));
     }
 
     public void removeDependency(Quest quest) {
+        getBook().markChanged();
         dependencies.remove(quest.getId());
         hiddenLines.remove(quest.getId());
     }
@@ -334,6 +345,7 @@ public class Quest extends QuestObject {
     }
 
     void readJson(JsonObject json) {
+        getBook().markChanged();
         title = JsonUtil.getString(json, "title", "");
         subtitle = JsonUtil.getString(json, "subtitle", "");
         description = JsonUtil.getStringList(json, "description");
