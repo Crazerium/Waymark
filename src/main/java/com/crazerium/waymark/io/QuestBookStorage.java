@@ -110,6 +110,19 @@ public class QuestBookStorage {
         json.addProperty("version", FORMAT_VERSION);
         json.add("chapters", JsonUtil.toArray(order));
         writeJson(bookFile, json);
+
+        // Files of chapters that were deleted in the editor.
+        Set<String> current = new HashSet<>(order);
+        for (String name : new ArrayList<>(loadedFiles)) {
+            if (current.contains(name)) continue;
+            Files.deleteIfExists(new File(chaptersDir, name + ".json").toPath());
+            loadedFiles.remove(name);
+        }
+    }
+
+    /** True if a chapter file with this name is on disk, e.g. one that failed to load and must not be overwritten. */
+    public boolean fileExists(String filename) {
+        return new File(chaptersDir, filename + ".json").exists();
     }
 
     public void save(QuestBook book) throws IOException {

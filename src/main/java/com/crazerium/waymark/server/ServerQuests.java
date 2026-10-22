@@ -42,6 +42,14 @@ public final class ServerQuests {
         return syncData;
     }
 
+    /** A chapter file name for a new chapter that clashes neither with the book nor with any file on disk. */
+    public static String freeFilename(String title) {
+        String base = book.uniqueFilename(title);
+        String name = base;
+        for (int i = 2; storage.fileExists(name); i++) name = base + "_" + i;
+        return name;
+    }
+
     /** Saves the chapters an edit changed and refreshes everything derived from the book. */
     public static void onEdited(Collection<Chapter> changed) {
         syncData = null;

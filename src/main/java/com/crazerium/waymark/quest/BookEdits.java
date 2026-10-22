@@ -26,6 +26,58 @@ public final class BookEdits {
     public static final String DELETE_LINK = "delete_link";
     public static final String TOGGLE_DEPENDENCY = "toggle_dependency";
     public static final String UPDATE_QUEST = "update_quest";
+    public static final String MOVE_QUEST_TO_CHAPTER = "move_quest_to_chapter";
+    public static final String ADD_LINK = "add_link";
+    public static final String CREATE_CHAPTER = "create_chapter";
+    public static final String UPDATE_CHAPTER = "update_chapter";
+    public static final String DELETE_CHAPTER = "delete_chapter";
+    public static final String MOVE_CHAPTER = "move_chapter";
+
+    /** Moves a quest to another chapter, keeping its id, so progress and dependencies stay. */
+    public static JsonObject moveQuestToChapter(Quest quest, Chapter chapter) {
+        JsonObject op = op(MOVE_QUEST_TO_CHAPTER);
+        op.addProperty("quest", Ids.format(quest.getId()));
+        op.addProperty("chapter", Ids.format(chapter.getId()));
+        return op;
+    }
+
+    public static JsonObject addLink(Chapter chapter, Quest quest, double x, double y) {
+        JsonObject op = op(ADD_LINK);
+        op.addProperty("chapter", Ids.format(chapter.getId()));
+        op.addProperty("quest", Ids.format(quest.getId()));
+        op.addProperty("x", x);
+        op.addProperty("y", y);
+        return op;
+    }
+
+    /** The server fills in "id" and "filename" before applying. */
+    public static JsonObject createChapter(String title) {
+        JsonObject op = op(CREATE_CHAPTER);
+        op.addProperty("title", title);
+        return op;
+    }
+
+    /** {@code data} holds "title", "description" and "icon", as in a chapter file. */
+    public static JsonObject updateChapter(Chapter chapter, JsonObject data) {
+        JsonObject op = op(UPDATE_CHAPTER);
+        op.addProperty("chapter", Ids.format(chapter.getId()));
+        op.add("data", data);
+        return op;
+    }
+
+    /** Deletes a chapter and every quest in it. */
+    public static JsonObject deleteChapter(Chapter chapter) {
+        JsonObject op = op(DELETE_CHAPTER);
+        op.addProperty("chapter", Ids.format(chapter.getId()));
+        return op;
+    }
+
+    public static JsonObject moveChapter(Chapter chapter, int index) {
+        JsonObject op = op(MOVE_CHAPTER);
+        op.addProperty("chapter", Ids.format(chapter.getId()));
+        op.addProperty("index", index);
+        return op;
+    }
 
     private BookEdits() {}
 
@@ -156,6 +208,71 @@ public final class BookEdits {
                     quest.addDependency(dependency);
                 }
                 changed.add(quest.getChapter());
+                break;
+            }
+            case MOVE_QUEST_TO_CHAPTER: {
+                Quest quest = quest(book, op, "quest");
+                Chapter from = quest.getChapter();
+                Chapter to = chapter(book, op);
+                if (from == to) break;
+                JsonObject json = quest.toJson();
+                from.removeQuest(quest);
+                Quest moved = to.createQuest(quest.getId(), quest.getX(), quest.getY());
+                moved.readJson(json);
+                // A link to the quest in its new home chapter would now show it twice.
+                to.removeLinksTo(quest.getId());
+                changed.add(from);
+                changed.add(to);
+                break;
+            }
+            case ADD_LINK: {
+                Chapter chapter = chapter(book, op);
+                Quest quest = quest(book, op, "quest");
+                if (quest.getChapter() == chapter)
+                    throw new IllegalArgumentException("The quest is already in this chapter");
+                chapter.addLink(quest, coord(op, "x"), coord(op, "y"));
+                changed.add(chapter);
+                break;
+            }
+            case CREATE_CHAPTER: {
+                long id = Ids.parse(JsonUtil.getString(op, "id", ""));
+                String filename = JsonUtil.getString(op, "filename", "");
+                if (id == Ids.NONE || book.get(id) != null || !filename.matches("[a-z0-9_]+"))
+                    throw new IllegalArgumentException("Bad new chapter");
+                for (Chapter c : book.getChapters()) if (c.getFilename()
+                    .equals(filename)) throw new IllegalArgumentException("Chapter file already exists");
+                Chapter chapter = new Chapter(book, id, filename);
+                chapter.setTitle(JsonUtil.getString(op, "title", ""));
+                book.addChapter(chapter);
+                changed.add(chapter);
+                break;
+            }
+            case UPDATE_CHAPTER: {
+                Chapter chapter = chapter(book, op);
+                JsonObject data = JsonUtil.getObject(op, "data");
+                if (data == null) throw new IllegalArgumentException("No chapter data");
+                chapter.setTitle(JsonUtil.getString(data, "title", ""));
+                chapter.setDescription(JsonUtil.getStringList(data, "description"));
+                chapter.setIcon(JsonUtil.readStack(JsonUtil.getObject(data, "icon")));
+                changed.add(chapter);
+                break;
+            }
+            case DELETE_CHAPTER: {
+                Chapter chapter = chapter(book, op);
+                Set<Long> removed = new HashSet<>();
+                for (Quest quest : chapter.getQuests()) removed.add(quest.getId());
+                book.removeChapter(chapter);
+                for (Chapter other : book.getChapters()) {
+                    for (long id : removed) {
+                        if (other.removeLinksTo(id)) changed.add(other);
+                        for (Quest q : other.getQuests()) if (q.removeDependencyId(id)) changed.add(other);
+                    }
+                }
+                break;
+            }
+            case MOVE_CHAPTER: {
+                Chapter chapter = chapter(book, op);
+                book.moveChapter(chapter, JsonUtil.getInt(op, "index", 0));
                 break;
             }
             case UPDATE_QUEST: {

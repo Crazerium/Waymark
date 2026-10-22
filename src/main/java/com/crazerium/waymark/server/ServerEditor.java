@@ -65,6 +65,10 @@ public final class ServerEditor {
         String name = JsonUtil.getString(op, "op", "");
         if (BookEdits.CREATE_QUEST.equals(name)) op.addProperty("id", Ids.format(book.newId()));
         if (BookEdits.UPDATE_QUEST.equals(name)) assignIds(book, op);
+        if (BookEdits.CREATE_CHAPTER.equals(name)) {
+            op.addProperty("id", Ids.format(book.newId()));
+            op.addProperty("filename", ServerQuests.freeFilename(JsonUtil.getString(op, "title", "")));
+        }
 
         Set<Chapter> changed;
         try {

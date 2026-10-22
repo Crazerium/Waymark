@@ -102,8 +102,16 @@ public class QuestBook {
         unregister(chapter);
     }
 
+    /** Moves a chapter to a new position in the book, clamped to the valid range. */
+    public void moveChapter(Chapter chapter, int index) {
+        if (!chapters.remove(chapter)) return;
+        chapters.add(Math.max(0, Math.min(index, chapters.size())), chapter);
+    }
+
+    /** A file name for a new chapter: the title in lowercase ASCII, made unique. Non-Latin titles become "chapter". */
     public String uniqueFilename(String title) {
-        String base = title.toLowerCase()
+        String base = title.replaceAll("§.", "")
+            .toLowerCase()
             .replaceAll("[^a-z0-9]+", "_")
             .replaceAll("^_+|_+$", "");
         if (base.isEmpty()) base = "chapter";

@@ -60,7 +60,9 @@ public class QuestBookScreen extends GuiScreen {
         /** Edit mode: moving a quest or link. */
         MOVE,
         /** Edit mode: Ctrl+drag from a quest to another to toggle a dependency. */
-        CONNECT
+        CONNECT,
+        /** Edit mode: dragging a chapter in the list to a new position. */
+        CHAPTER
     }
 
     private static boolean editMode;
@@ -69,6 +71,10 @@ public class QuestBookScreen extends GuiScreen {
     private Node dragNode;
     private int dragStartX, dragStartY, lastMouseX, lastMouseY;
     private ContextMenu menu;
+    /** Edit mode: index of the chapter being dragged in the list. */
+    private int dragChapter;
+    /** Edit mode: the quest copied with "Copy as link", pasted as a link into another chapter. */
+    private static long linkClipboard;
     private int editButtonX, editButtonW;
 
     private List<String> tooltip;
@@ -134,7 +140,8 @@ public class QuestBookScreen extends GuiScreen {
 
     /** Re-resolves the open chapter and quest after the server sent a new book (e.g. after /waymark reload). */
     private void refresh(QuestBook book) {
-        if (chapter != null && chapter.getBook() == book) return;
+        // The chapter may also have been deleted from this same book by an edit.
+        if (chapter != null && chapter.getBook() == book && book.get(chapter.getId()) == chapter) return;
         QuestObject found = book.get(chapter != null ? chapter.getId() : lastChapterId);
         chapter = null;
         selectChapter(
@@ -326,7 +333,8 @@ public class QuestBookScreen extends GuiScreen {
         editButtonX = width - MARGIN - editButtonW;
         GuiUtil.button(fontRendererObj, editButtonX, MARGIN, editButtonW, 14, label, mx, my);
         if (editMode) {
-            String help = GuiUtil.trim(fontRendererObj, I18n.format("waymark.edit.help"), editButtonX - canvasX - 8);
+            String text = I18n.format("waymark.edit.help");
+            String help = GuiUtil.trim(fontRendererObj, text, editButtonX - canvasX - 8);
             fontRendererObj.drawString(help, canvasX, MARGIN + 4, 0xFFCC66);
         }
     }
@@ -334,18 +342,34 @@ public class QuestBookScreen extends GuiScreen {
     private void drawChapterList(QuestBook book, int mx, int my) {
         GuiUtil.frame(listX, listY, LIST_WIDTH, listH, 0xC0101018, 0xFF404860);
         List<Chapter> chapters = book.getChapters();
+        boolean draggingToList = dragMoved && (drag == Drag.CHAPTER || drag == Drag.MOVE);
+        // Holding a dragged chapter or quest near the list's top or bottom edge scrolls it.
+        if (draggingToList && mx >= listX && mx < listX + LIST_WIDTH) {
+            if (my < listY + 16) listScroll -= 4;
+            else if (my > listY + listH - 16) listScroll += 4;
+        }
         listScroll = Math.max(0, Math.min(listScroll, chapters.size() * ROW - (listH - 4)));
 
         GuiUtil.scissor(listX + 1, listY + 1, LIST_WIDTH - 2, listH - 2);
         boolean mouseInList = GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH);
+        boolean draggingChapter = drag == Drag.CHAPTER && dragMoved && dragChapter < chapters.size();
+        Chapter dragged = draggingChapter ? chapters.get(dragChapter) : null;
+        // While a chapter is dragged the list is drawn in the order it would have if dropped now.
+        List<Chapter> shown = chapters;
+        if (draggingChapter) {
+            shown = new ArrayList<>(chapters);
+            shown.remove(dragged);
+            shown.add(dropTarget(my, chapters.size()), dragged);
+        }
         Chapter hoveredChapter = null;
-        for (int i = 0; i < chapters.size(); i++) {
+        for (int i = 0; i < shown.size(); i++) {
             int y = listY + 2 + i * ROW - listScroll;
             if (y + ROW < listY || y > listY + listH) continue;
-            Chapter c = chapters.get(i);
+            Chapter c = shown.get(i);
             boolean selected = c == chapter;
-            if (selected) GuiUtil.rect(listX + 1, y, LIST_WIDTH - 2, ROW, 0xFF2A3550);
-            else if (mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW))
+            if (c == dragged) GuiUtil.frame(listX + 1, y, LIST_WIDTH - 2, ROW, 0x50FFCC00, 0xFFFFCC00);
+            else if (selected) GuiUtil.rect(listX + 1, y, LIST_WIDTH - 2, ROW, 0xFF2A3550);
+            else if (!draggingChapter && mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW))
                 GuiUtil.rect(listX + 1, y, LIST_WIDTH - 2, ROW, 0x30FFFFFF);
 
             GuiUtil.item(chapterIcon(c), listX + 3, y + 2);
@@ -357,7 +381,11 @@ public class QuestBookScreen extends GuiScreen {
                 y + 6,
                 selected ? 0xFFFFFF : 0xC0C0C0);
             if (hasClaimable(c)) GuiUtil.rect(listX + LIST_WIDTH - 8, y + 8, 4, 4, QuestState.CLAIMABLE.color);
-            if (mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW)) hoveredChapter = c;
+            boolean rowHovered = mouseInList && GuiUtil.inside(mx, my, listX, y, LIST_WIDTH, ROW);
+            // A quest being dragged over a chapter shows where it will go.
+            if (drag == Drag.MOVE && dragMoved && rowHovered && c != chapter)
+                GuiUtil.frame(listX + 1, y, LIST_WIDTH - 2, ROW, 0x30FFCC00, 0xFFFFCC00);
+            if (rowHovered && drag == Drag.NONE) hoveredChapter = c;
         }
         GuiUtil.endScissor();
 
@@ -528,7 +556,21 @@ public class QuestBookScreen extends GuiScreen {
             int index = (my - listY - 2 + listScroll) / ROW;
             List<Chapter> chapters = ClientQuests.getBook()
                 .getChapters();
-            if (index >= 0 && index < chapters.size() && chapters.get(index) != chapter) {
+            Chapter clicked = index >= 0 && index < chapters.size() ? chapters.get(index) : null;
+            if (button == 1 && editMode) {
+                openChapterMenu(clicked, index, chapters.size(), mx, my);
+                return;
+            }
+            if (button == 0 && editMode && clicked != null) {
+                // Selecting happens on release, so the same press can also start dragging the chapter.
+                drag = Drag.CHAPTER;
+                dragChapter = index;
+                dragMoved = false;
+                dragStartX = lastMouseX = mx;
+                dragStartY = lastMouseY = my;
+                return;
+            }
+            if (clicked != null && clicked != chapter) {
                 selectChapter(chapters.get(index));
                 playClick();
             }
@@ -569,6 +611,36 @@ public class QuestBookScreen extends GuiScreen {
         Node from = dragNode;
         drag = Drag.NONE;
         dragNode = null;
+        List<Chapter> chapters = ClientQuests.getBook()
+            .getChapters();
+
+        if (finished == Drag.CHAPTER) {
+            if (dragChapter >= chapters.size()) return;
+            Chapter dragged = chapters.get(dragChapter);
+            if (!dragMoved) {
+                if (dragged != chapter) {
+                    selectChapter(dragged);
+                    playClick();
+                }
+                return;
+            }
+            int target = dropTarget(my, chapters.size());
+            if (target != dragChapter) ClientQuests.sendEdit(BookEdits.moveChapter(dragged, target));
+            return;
+        }
+
+        if (finished == Drag.MOVE && dragMoved && GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH)) {
+            // Dropped on a chapter: move the quest there, or with Alt leave it and add a link to it there.
+            Chapter target = chapterAt(my, chapters);
+            if (target == null || target == chapter) return;
+            if (isAltKeyDown()) {
+                if (target != from.quest.getChapter())
+                    ClientQuests.sendEdit(BookEdits.addLink(target, from.quest, from.quest.getX(), from.quest.getY()));
+            } else if (!from.link) {
+                ClientQuests.sendEdit(BookEdits.moveQuestToChapter(from.quest, target));
+            }
+            return;
+        }
 
         if (!dragMoved) {
             // A click without dragging opens the quest, in edit mode too.
@@ -591,6 +663,39 @@ public class QuestBookScreen extends GuiScreen {
         }
     }
 
+    private static boolean isAltKeyDown() {
+        return Keyboard.isKeyDown(Keyboard.KEY_LMENU) || Keyboard.isKeyDown(Keyboard.KEY_RMENU);
+    }
+
+    private Chapter chapterAt(int my, List<Chapter> chapters) {
+        int index = (my - listY - 2 + listScroll) / ROW;
+        return my >= listY + 2 && index < chapters.size() ? chapters.get(index) : null;
+    }
+
+    /**
+     * Where the dragged chapter ends up if dropped now: the row under the mouse, counted in the list without the
+     * dragged chapter, so the preview and the drop always agree.
+     */
+    private int dropTarget(int my, int count) {
+        int index = (my - listY - 2 + listScroll) / ROW;
+        return Math.max(0, Math.min(count - 1, index));
+    }
+
+    private void openChapterMenu(Chapter clicked, int index, int count, int mx, int my) {
+        menu = new ContextMenu(mx, my);
+        menu.add(
+            I18n.format("waymark.edit.new_chapter"),
+            () -> ClientQuests.sendEdit(BookEdits.createChapter(I18n.format("waymark.edit.new_chapter_title"))));
+        if (clicked == null) return;
+        menu.add(
+            I18n.format("waymark.edit.edit_chapter"),
+            () -> mc.displayGuiScreen(new ChapterEditScreen(this, clicked)));
+        menu.addDangerous(
+            I18n.format("waymark.edit.delete_chapter"),
+            I18n.format("waymark.edit.confirm"),
+            () -> ClientQuests.sendEdit(BookEdits.deleteChapter(clicked)));
+    }
+
     private void openEditMenu(Node node, int mx, int my) {
         menu = new ContextMenu(mx, my);
         if (node == null) {
@@ -598,6 +703,11 @@ public class QuestBookScreen extends GuiScreen {
             menu.add(
                 I18n.format("waymark.edit.new_quest"),
                 () -> ClientQuests.sendEdit(BookEdits.createQuest(chapter, x, y)));
+            Quest copied = ClientQuests.getBook()
+                .getQuest(linkClipboard);
+            if (copied != null && copied.getChapter() != chapter) menu.add(
+                I18n.format("waymark.edit.paste_link", GuiUtil.colorCodes(copied.getDisplayTitle())),
+                () -> ClientQuests.sendEdit(BookEdits.addLink(chapter, copied, x, y)));
         } else if (node.link) {
             int index = node.linkIndex;
             menu.add(
@@ -606,6 +716,7 @@ public class QuestBookScreen extends GuiScreen {
         } else {
             Quest quest = node.quest;
             menu.add(I18n.format("waymark.edit.edit_quest"), () -> editQuest(quest));
+            menu.add(I18n.format("waymark.edit.copy_link"), () -> linkClipboard = quest.getId());
             menu.addDangerous(
                 I18n.format("waymark.edit.delete_quest"),
                 I18n.format("waymark.edit.confirm"),
