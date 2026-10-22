@@ -119,7 +119,7 @@ public class QuestBookStorage {
         loadedFiles.addAll(current);
     }
 
-    private static JsonObject readJson(File file) throws IOException {
+    static JsonObject readJson(File file) throws IOException {
         try (Reader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             JsonElement element = new JsonParser().parse(reader);
             if (!element.isJsonObject()) throw new IOException("Expected a JSON object");
@@ -128,7 +128,7 @@ public class QuestBookStorage {
     }
 
     /** Writes to a temporary file first so a crash mid-write cannot leave a half-written file. */
-    private static void writeJson(File file, JsonObject json) throws IOException {
+    static void writeJson(File file, JsonObject json) throws IOException {
         File tmp = new File(file.getPath() + ".tmp");
         try (Writer writer = Files.newBufferedWriter(tmp.toPath(), StandardCharsets.UTF_8)) {
             GSON.toJson(json, writer);

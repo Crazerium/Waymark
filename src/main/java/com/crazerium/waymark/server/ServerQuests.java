@@ -24,6 +24,7 @@ public final class ServerQuests {
 
     public static void load() {
         book = storage.load();
+        ServerProgress.onBookLoaded(book);
     }
 
     public static void save() throws IOException {

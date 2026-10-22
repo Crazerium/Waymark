@@ -1,5 +1,6 @@
 package com.crazerium.waymark.quest.task;
 
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 import net.minecraftforge.oredict.OreDictionary;
 
@@ -84,6 +85,38 @@ public class ItemTask extends Task {
             for (ItemStack ore : OreDictionary.getOres(oreDict)) return ore;
         }
         return null;
+    }
+
+    /** Tasks that keep the items just check the inventory; tasks that consume them wait for the submit button. */
+    @Override
+    public boolean isAutoDetected() {
+        return !consume;
+    }
+
+    @Override
+    public long detect(EntityPlayerMP player, long progress) {
+        if (consume) return progress;
+        long found = 0;
+        for (ItemStack stack : player.inventory.mainInventory) {
+            if (matches(stack)) found += stack.stackSize;
+        }
+        return Math.max(progress, Math.min(found, count));
+    }
+
+    @Override
+    public long submit(EntityPlayerMP player, long progress) {
+        if (!consume) return detect(player, progress);
+        ItemStack[] inventory = player.inventory.mainInventory;
+        for (int i = 0; i < inventory.length && progress < count; i++) {
+            ItemStack stack = inventory[i];
+            if (!matches(stack)) continue;
+            int taken = (int) Math.min(stack.stackSize, count - progress);
+            stack.stackSize -= taken;
+            if (stack.stackSize <= 0) inventory[i] = null;
+            progress += taken;
+        }
+        player.inventoryContainer.detectAndSendChanges();
+        return progress;
     }
 
     public boolean matches(ItemStack stack) {

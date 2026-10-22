@@ -53,6 +53,13 @@ public class Quest extends QuestObject {
         this.title = title;
     }
 
+    /** The title, or the icon's item name if the title is empty. */
+    public String getDisplayTitle() {
+        if (!title.isEmpty()) return title;
+        ItemStack displayIcon = getIcon();
+        return displayIcon != null ? displayIcon.getDisplayName() : "Quest " + Ids.format(getId());
+    }
+
     public String getSubtitle() {
         return subtitle;
     }

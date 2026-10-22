@@ -1,5 +1,6 @@
 package com.crazerium.waymark.quest;
 
+import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.ItemStack;
 
 import com.google.gson.JsonObject;
@@ -31,6 +32,21 @@ public abstract class Task extends QuestObject {
 
     public ItemStack getIcon() {
         return null;
+    }
+
+    /** True if the server should call {@link #detect} periodically for players who can progress this task. */
+    public boolean isAutoDetected() {
+        return false;
+    }
+
+    /** Called on the server about once a second if {@link #isAutoDetected()}; returns the new progress. */
+    public long detect(EntityPlayerMP player, long progress) {
+        return progress;
+    }
+
+    /** Called on the server when the player presses the task's submit button; returns the new progress. */
+    public long submit(EntityPlayerMP player, long progress) {
+        return progress;
     }
 
     /** Writes type-specific fields; "id" and "type" are written by the quest. */

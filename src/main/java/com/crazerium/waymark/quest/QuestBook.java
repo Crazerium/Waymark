@@ -34,6 +34,24 @@ public class QuestBook {
         return o instanceof Quest ? (Quest) o : null;
     }
 
+    public List<Quest> getAllQuests() {
+        List<Quest> list = new ArrayList<>();
+        for (Chapter chapter : chapters) list.addAll(chapter.getQuests());
+        return list;
+    }
+
+    /** Quests that list the given quest as a dependency. */
+    public List<Quest> getDependents(Quest quest) {
+        List<Quest> list = new ArrayList<>();
+        for (Chapter chapter : chapters) {
+            for (Quest q : chapter.getQuests()) {
+                if (q.getDependencyIds()
+                    .contains(quest.getId())) list.add(q);
+            }
+        }
+        return list;
+    }
+
     public int getObjectCount() {
         return objects.size();
     }
