@@ -22,6 +22,9 @@ import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.client.ClientSettings;
 import com.crazerium.waymark.client.QuestState;
 import com.crazerium.waymark.client.compat.Recipes;
+import com.crazerium.waymark.compat.AppEng;
+import com.crazerium.waymark.network.MessageMeUnbind;
+import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.progress.TeamProgress;
 import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.Chapter;
@@ -366,6 +369,7 @@ public class QuestBookScreen extends GuiScreen {
             drawChapterList(book, hx, hy);
         }
         drawPinButton(hx, hy);
+        drawMeButton(hx, hy);
 
         if (questView != null) {
             GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
@@ -422,7 +426,7 @@ public class QuestBookScreen extends GuiScreen {
 
     private void drawHeader(QuestBook book, int mx, int my) {
         // Text starts after the title and pin, which a folded chapter list no longer pushes aside.
-        int textX = Math.max(canvasX, pinX + 18);
+        int textX = Math.max(canvasX, pinX + (AppEng.available() ? 38 : 18));
         int right = width - MARGIN;
         editButtonW = 0;
         if (ClientQuests.canEdit()) {
@@ -474,6 +478,30 @@ public class QuestBookScreen extends GuiScreen {
     }
 
     /** A small pin next to the book title: pins the chapter list open, or lets it fold away. */
+    /**
+     * With AE2 installed: shows whether the team has bound an ME network (green) or not (grey). Shift+click unbinds.
+     */
+    private void drawMeButton(int mx, int my) {
+        if (!AppEng.available()) return;
+        TeamProgress progress = ClientQuests.getProgress();
+        int[] link = progress != null ? progress.getMeLink() : null;
+        int x = pinX + 16;
+        boolean hover = GuiUtil.inside(mx, my, x, MARGIN + 1, 18, 12);
+        GuiUtil.frame(x, MARGIN + 1, 18, 12, hover ? 0xFF404058 : 0xFF202030, link != null ? 0xFF55DD55 : 0xFF606070);
+        fontRendererObj.drawString(link != null ? "§aME" : "§7ME", x + 3, MARGIN + 3, 0xFFFFFF);
+        if (!hover) return;
+        List<String> lines = new ArrayList<>();
+        if (link != null) {
+            lines.add("§a" + I18n.format("waymark.me.tooltip_bound", link[0], link[1], link[2], link[3]));
+            lines.add("§7" + I18n.format("waymark.me.tooltip_claim"));
+            lines.add("§8" + I18n.format("waymark.me.tooltip_unbind"));
+        } else {
+            lines.add(I18n.format("waymark.me.tooltip_none"));
+            lines.add("§7" + I18n.format("waymark.me.tooltip_how"));
+        }
+        showTooltip(lines, mx, my);
+    }
+
     private void drawPinButton(int mx, int my) {
         boolean pinned = ClientSettings.isChapterListPinned();
         boolean hover = GuiUtil.inside(mx, my, pinX, MARGIN + 1, 12, 12);
@@ -726,6 +754,14 @@ public class QuestBookScreen extends GuiScreen {
         }
         if (questView != null) {
             questView.mouseClicked(mx, my, button);
+            return;
+        }
+        if (AppEng.available() && isShiftKeyDown() && GuiUtil.inside(mx, my, pinX + 16, MARGIN + 1, 18, 12)) {
+            TeamProgress progress = ClientQuests.getProgress();
+            if (progress != null && progress.getMeLink() != null) {
+                WaymarkNetwork.CHANNEL.sendToServer(new MessageMeUnbind());
+                playClick();
+            }
             return;
         }
         if (GuiUtil.inside(mx, my, pinX, MARGIN + 1, 12, 12)) {

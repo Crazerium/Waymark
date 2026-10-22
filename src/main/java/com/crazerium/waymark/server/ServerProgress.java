@@ -17,8 +17,12 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.ChatComponentTranslation;
+import net.minecraft.util.ChatStyle;
+import net.minecraft.util.EnumChatFormatting;
 import net.minecraftforge.oredict.OreDictionary;
 
+import com.crazerium.waymark.compat.AppEng;
 import com.crazerium.waymark.io.ProgressStorage;
 import com.crazerium.waymark.network.MessageBlob;
 import com.crazerium.waymark.network.MessageCanEdit;
@@ -79,6 +83,8 @@ public final class ServerProgress {
     public static void onBookLoaded(QuestBook book) {
         autoDetectedTasks.clear();
         heldByItem.clear();
+        networkCounts.clear();
+        networkCheckedAt.clear();
         heldByOre.clear();
         dependents.clear();
         craftTasks.clear();
@@ -213,23 +219,99 @@ public final class ServerProgress {
      * Counts the player's items for "have items" tasks. Instead of testing every such task against every slot, each
      * stack only looks up the tasks that want its item or one of its ore names.
      */
+    /** Adds {@code size} of this stack to every "have items" task that wants it. */
+    private static void count(Map<ItemTask, Long> found, Set<ItemTask> candidates, ItemStack stack, long size) {
+        candidates.clear();
+        List<ItemTask> byItem = heldByItem.get(stack.getItem());
+        if (byItem != null) candidates.addAll(byItem);
+        if (!heldByOre.isEmpty()) for (int ore : OreDictionary.getOreIDs(stack)) {
+            List<ItemTask> byOre = heldByOre.get(ore);
+            if (byOre != null) candidates.addAll(byOre);
+        }
+        for (ItemTask task : candidates) {
+            if (task.getFilter()
+                .matches(stack)) found.merge(task, size, Long::sum);
+        }
+    }
+
+    /** How often a team's ME network is read; big networks are slow to walk. */
+    private static final long NETWORK_INTERVAL_MS = 5000;
+    private static final Map<UUID, Map<ItemTask, Long>> networkCounts = new HashMap<>();
+    private static final Map<UUID, Long> networkCheckedAt = new HashMap<>();
+
+    /**
+     * The bound network's contents counted per "have items" task, refreshed every few seconds. Empty when the team has
+     * no network, its chunk is no longer claimed by the team, or it is not loaded.
+     */
+    private static Map<ItemTask, Long> networkCounts(TeamProgress team) {
+        int[] link = team.getMeLink();
+        if (link == null || !AppEng.available()) return Collections.emptyMap();
+        long now = System.currentTimeMillis();
+        Long checked = networkCheckedAt.get(team.getId());
+        if (checked != null && now - checked < NETWORK_INTERVAL_MS)
+            return networkCounts.getOrDefault(team.getId(), Collections.emptyMap());
+        networkCheckedAt.put(team.getId(), now);
+        Map<ItemTask, Long> counts = new HashMap<>();
+        if (meLinkUsable(team, link)) {
+            Set<ItemTask> candidates = new HashSet<>();
+            AppEng.forEachStored(link, (stack, size) -> count(counts, candidates, stack, size));
+        }
+        networkCounts.put(team.getId(), counts);
+        return counts;
+    }
+
+    /** The network may only be used while its chunk is claimed by this very team. */
+    private static boolean meLinkUsable(TeamProgress team, int[] link) {
+        return team.getId()
+            .equals(Teams.claimedBy(link[0], link[1], link[2], link[3]));
+    }
+
+    /** Binds the ME network of the device a player right-clicked with the quest book, if the team claims its chunk. */
+    public static void bindMeNetwork(EntityPlayerMP player, int dimension, int x, int y, int z) {
+        if (!Teams.claimsEnabled()) {
+            tell(player, "waymark.me.no_claims", EnumChatFormatting.RED);
+            return;
+        }
+        TeamProgress team = get(player);
+        UUID owner = Teams.claimedBy(dimension, x, y, z);
+        if (owner == null) {
+            tell(player, "waymark.me.not_claimed", EnumChatFormatting.RED);
+            return;
+        }
+        if (!owner.equals(team.getId())) {
+            tell(player, "waymark.me.other_team", EnumChatFormatting.RED);
+            return;
+        }
+        team.setMeLink(new int[] { dimension, x, y, z });
+        networkCheckedAt.remove(team.getId());
+        tell(player, "waymark.me.bound", EnumChatFormatting.GREEN);
+        for (EntityPlayerMP member : onlineMembers(team)) sendProgress(member, team);
+    }
+
+    public static void unbindMeNetwork(EntityPlayerMP player) {
+        TeamProgress team = get(player);
+        if (team.getMeLink() == null) return;
+        team.setMeLink(null);
+        networkCounts.remove(team.getId());
+        tell(player, "waymark.me.unbound", EnumChatFormatting.YELLOW);
+        for (EntityPlayerMP member : onlineMembers(team)) sendProgress(member, team);
+    }
+
+    private static void tell(EntityPlayerMP player, String key, EnumChatFormatting color) {
+        ChatComponentTranslation message = new ChatComponentTranslation(key);
+        message.setChatStyle(new ChatStyle().setColor(color));
+        player.addChatMessage(message);
+    }
+
     private static void detectHeldItems(TeamProgress team, EntityPlayerMP player) {
         Map<ItemTask, Long> found = new HashMap<>();
         Set<ItemTask> candidates = new HashSet<>();
         for (ItemStack stack : player.inventory.mainInventory) {
-            if (stack == null || stack.getItem() == null) continue;
-            candidates.clear();
-            List<ItemTask> byItem = heldByItem.get(stack.getItem());
-            if (byItem != null) candidates.addAll(byItem);
-            if (!heldByOre.isEmpty()) for (int ore : OreDictionary.getOreIDs(stack)) {
-                List<ItemTask> byOre = heldByOre.get(ore);
-                if (byOre != null) candidates.addAll(byOre);
-            }
-            for (ItemTask task : candidates) {
-                if (task.getFilter()
-                    .matches(stack)) found.merge(task, (long) stack.stackSize, Long::sum);
-            }
+            if (stack != null && stack.getItem() != null) count(found, candidates, stack, stack.stackSize);
         }
+        // Items in the team's bound ME network count as well.
+        for (Map.Entry<ItemTask, Long> e : networkCounts(team).entrySet())
+            found.merge(e.getKey(), e.getValue(), Long::sum);
         for (Map.Entry<ItemTask, Long> e : found.entrySet()) {
             ItemTask task = e.getKey();
             if (team.isComplete(task) || !team.canProgress(task.getQuest())) continue;
@@ -246,6 +328,19 @@ public final class ServerProgress {
         TeamProgress team = get(player);
         if (team.isComplete(task) || !team.canProgress(task.getQuest())) return;
         setProgress(team, task, task.submit(player, team.getProgress(task)));
+        // What the inventory did not cover is taken from the team's bound ME network.
+        if (task instanceof ItemTask && ((ItemTask) task).isConsume() && !team.isComplete(task)) {
+            int[] link = team.getMeLink();
+            if (link != null && meLinkUsable(team, link)) {
+                ItemTask itemTask = (ItemTask) task;
+                long need = itemTask.getCount() - team.getProgress(task);
+                long taken = AppEng.extract(link, player, itemTask.getFilter()::matches, need);
+                if (taken > 0) {
+                    setProgress(team, task, team.getProgress(task) + taken);
+                    networkCheckedAt.remove(team.getId());
+                }
+            }
+        }
     }
 
     public static void onCrafted(EntityPlayerMP player, ItemStack stack, boolean smelted) {

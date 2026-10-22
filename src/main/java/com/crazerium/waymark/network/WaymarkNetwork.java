@@ -29,5 +29,6 @@ public final class WaymarkNetwork {
         CHANNEL.registerMessage(MessageEditRequest.Handler.class, MessageEditRequest.class, id++, Side.SERVER);
         CHANNEL.registerMessage(MessageImageRequest.Handler.class, MessageImageRequest.class, id++, Side.SERVER);
         CHANNEL.registerMessage(MessageImageUpload.Handler.class, MessageImageUpload.class, id++, Side.SERVER);
+        CHANNEL.registerMessage(MessageMeUnbind.Handler.class, MessageMeUnbind.class, id++, Side.SERVER);
     }
 }

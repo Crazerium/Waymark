@@ -38,8 +38,11 @@ dependencies {
     compileOnly("com.github.GTNewHorizons:ServerUtilities:2.4.21:dev") { transitive = false }
     // Optional: with NotEnoughItems installed, R and U on an item in the book show its recipes and uses.
     compileOnly("com.github.GTNewHorizons:NotEnoughItems:2.8.164-GTNH:dev") { transitive = false }
+    // Optional: with Applied Energistics 2, a team can bind its ME network so stored items count for quests.
+    compileOnly("com.github.GTNewHorizons:Applied-Energistics-2-Unofficial:rv3-beta-1091-GTNH:dev") { transitive = false }
 
     // Only in runClient/runServer, to test the integrations; not a dependency of the published mod.
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.8.164-GTNH:dev")
     runtimeOnlyNonPublishable("com.github.GTNewHorizons:ServerUtilities:2.4.21:dev")
+    runtimeOnlyNonPublishable("com.github.GTNewHorizons:Applied-Energistics-2-Unofficial:rv3-beta-1091-GTNH:dev")
 }

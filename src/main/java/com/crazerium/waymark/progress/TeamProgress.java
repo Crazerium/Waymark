@@ -30,6 +30,8 @@ public class TeamProgress {
     private final Map<UUID, Set<Long>> claimed = new HashMap<>();
     /** How many times each quest was completed; repeatable quests count up, others stay at 1. */
     private final Map<Long, Integer> times = new HashMap<>();
+    /** The bound ME network: an AE2 device at {dimension, x, y, z}, or null. */
+    private int[] meLink;
     private boolean dirty;
     /** Changes with every change of progress, so the client can cache what it computes from it. */
     private int version;
@@ -178,6 +180,16 @@ public class TeamProgress {
         return version;
     }
 
+    /** {dimension, x, y, z} of the device the team bound its ME network with, or null. */
+    public int[] getMeLink() {
+        return meLink == null ? null : meLink.clone();
+    }
+
+    public void setMeLink(int[] link) {
+        meLink = link == null ? null : link.clone();
+        markDirty();
+    }
+
     public boolean isDirty() {
         return dirty;
     }
@@ -207,6 +219,14 @@ public class TeamProgress {
                 array);
         }
         json.add("claimed", rewards);
+        if (meLink != null) {
+            JsonObject link = new JsonObject();
+            link.addProperty("dim", meLink[0]);
+            link.addProperty("x", meLink[1]);
+            link.addProperty("y", meLink[2]);
+            link.addProperty("z", meLink[3]);
+            json.add("me_link", link);
+        }
         return json;
     }
 
@@ -217,6 +237,20 @@ public class TeamProgress {
         times.clear();
         readLongMap(json.get("tasks"), taskProgress);
         readLongMap(json.get("completed"), completed);
+        JsonElement link = json.get("me_link");
+        if (link != null && link.isJsonObject()) {
+            JsonObject l = link.getAsJsonObject();
+            meLink = new int[] { l.get("dim")
+                .getAsInt(),
+                l.get("x")
+                    .getAsInt(),
+                l.get("y")
+                    .getAsInt(),
+                l.get("z")
+                    .getAsInt() };
+        } else {
+            meLink = null;
+        }
         Map<Long, Long> counts = new HashMap<>();
         readLongMap(json.get("times"), counts);
         for (Map.Entry<Long, Long> e : counts.entrySet()) times.put(

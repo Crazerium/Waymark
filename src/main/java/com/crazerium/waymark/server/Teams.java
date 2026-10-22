@@ -16,12 +16,40 @@ public final class Teams {
 
     private Teams() {}
 
-    public static UUID teamOf(UUID player) {
+    /**
+     * The Waymark team that has claimed the chunk at this block with ServerUtilities, or null when it is not claimed,
+     * chunk claiming is off, or ServerUtilities is not installed.
+     */
+    public static UUID claimedBy(int dimension, int x, int y, int z) {
+        if (!serverUtilities()) return null;
+        try {
+            return ServerUtilitiesTeams.claimedBy(dimension, x, y, z);
+        } catch (LinkageError | RuntimeException e) {
+            Waymark.LOG.error("Could not read ServerUtilities claims", e);
+            return null;
+        }
+    }
+
+    /** True when ServerUtilities is installed and its chunk claiming is switched on. */
+    public static boolean claimsEnabled() {
+        if (!serverUtilities()) return false;
+        try {
+            return ServerUtilitiesTeams.claimsEnabled();
+        } catch (LinkageError | RuntimeException e) {
+            return false;
+        }
+    }
+
+    private static boolean serverUtilities() {
         if (serverUtilities == null) {
             serverUtilities = Loader.isModLoaded("serverutilities");
             if (serverUtilities) Waymark.LOG.info("Using ServerUtilities teams for quest progress");
         }
-        if (serverUtilities) {
+        return serverUtilities;
+    }
+
+    public static UUID teamOf(UUID player) {
+        if (serverUtilities()) {
             try {
                 UUID team = ServerUtilitiesTeams.teamOf(player);
                 if (team != null) return team;
