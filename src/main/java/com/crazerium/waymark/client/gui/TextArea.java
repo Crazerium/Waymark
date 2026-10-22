@@ -35,8 +35,10 @@ class TextArea {
         this.lines = new ArrayList<>(initial);
         fields = new GuiTextField[visibleLines];
         for (int i = 0; i < visibleLines; i++) {
-            fields[i] = new GuiTextField(font, x, y + i * LINE_H, w, LINE_H - 2);
+            // No per-line box: the area draws one background, so the lines read as one text.
+            fields[i] = new GuiTextField(font, x + 4, y + i * LINE_H + 3, w - 8, LINE_H - 3);
             fields[i].setMaxStringLength(2000);
+            fields[i].setEnableBackgroundDrawing(false);
         }
         rebind();
     }
@@ -58,7 +60,19 @@ class TextArea {
         return focus >= 0;
     }
 
+    /** Types text at the cursor of the line being edited, e.g. a formatting code from a toolbar button. */
+    void insert(String text) {
+        if (focus < first || focus >= first + fields.length) return;
+        GuiTextField field = fields[focus - first];
+        field.writeText(text);
+        lines.set(focus, field.getText());
+        cursor = field.getCursorPosition();
+    }
+
     void draw() {
+        GuiUtil.frame(x, y, w, height(), 0xFF0C0C12, 0xFF404860);
+        if (focus >= first && focus < first + fields.length)
+            GuiUtil.rect(x + 1, y + (focus - first) * LINE_H + 1, w - 2, LINE_H, 0x18FFFFFF);
         for (GuiTextField field : fields) field.drawTextBox();
         if (lines.size() > fields.length) {
             int barH = Math.max(6, height() * fields.length / lines.size());

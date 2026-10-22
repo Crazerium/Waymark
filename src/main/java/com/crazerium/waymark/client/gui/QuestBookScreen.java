@@ -73,6 +73,7 @@ public class QuestBookScreen extends GuiScreen {
     private Node dragNode;
     private int dragStartX, dragStartY, lastMouseX, lastMouseY;
     private ContextMenu menu;
+    private TextPrompt prompt;
     /** Edit mode: index of the chapter being dragged in the list. */
     private int dragChapter;
     /** Edit mode: the quest copied with "Copy as link", pasted as a link into another chapter. */
@@ -129,6 +130,19 @@ public class QuestBookScreen extends GuiScreen {
     void editQuest(Quest quest) {
         questView = null;
         mc.displayGuiScreen(new QuestEditScreen(this, quest));
+    }
+
+    void openMenu(ContextMenu contextMenu) {
+        menu = contextMenu;
+    }
+
+    void openPrompt(String heading, String value, java.util.function.Consumer<String> onAccept) {
+        prompt = new TextPrompt(fontRendererObj, width, height, heading, value, onAccept);
+    }
+
+    @Override
+    public void updateScreen() {
+        if (prompt != null) prompt.tick();
     }
 
     void closeQuest() {
@@ -302,7 +316,7 @@ public class QuestBookScreen extends GuiScreen {
         if (!ClientQuests.canEdit()) editMode = false;
 
         // While the quest window or a menu is open the map behind it must not react to the mouse.
-        boolean blocked = questView != null || menu != null;
+        boolean blocked = questView != null || menu != null || prompt != null;
         int hx = blocked ? -1 : mx;
         int hy = blocked ? -1 : my;
         drawEditHeader(hx, hy);
@@ -316,6 +330,10 @@ public class QuestBookScreen extends GuiScreen {
         if (menu != null) {
             GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
             menu.draw(fontRendererObj, mx, my);
+        }
+        if (prompt != null) {
+            GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
+            prompt.draw(fontRendererObj, mx, my);
         }
 
         super.drawScreen(mx, my, partialTicks);
@@ -542,6 +560,10 @@ public class QuestBookScreen extends GuiScreen {
     protected void mouseClicked(int mx, int my, int button) {
         super.mouseClicked(mx, my, button);
         if (ClientQuests.getBook() == null) return;
+        if (prompt != null) {
+            if (prompt.mouseClicked(mx, my, button)) prompt = null;
+            return;
+        }
         if (menu != null) {
             if (!menu.mouseClicked(mx, my)) menu = null;
             else playClick();
@@ -764,6 +786,10 @@ public class QuestBookScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (prompt != null) {
+            if (prompt.keyTyped(c, key)) prompt = null;
+            return;
+        }
         if (key == Keyboard.KEY_ESCAPE && menu != null) {
             menu = null;
             return;
@@ -772,6 +798,7 @@ public class QuestBookScreen extends GuiScreen {
             closeQuest();
             return;
         }
+        if (questView != null && isEditing() && questView.shortcut(key)) return;
         if (key == ClientEvents.OPEN_BOOK.getKeyCode() && questView == null) {
             mc.displayGuiScreen(null);
             return;
