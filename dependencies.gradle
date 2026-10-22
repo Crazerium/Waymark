@@ -34,5 +34,6 @@
  * For more details, see https://docs.gradle.org/8.0.1/userguide/java_library_plugin.html#sec:java_library_configurations_graph
  */
 dependencies {
-    //runtimeOnlyNonPublishable("com.github.GTNewHorizons:NotEnoughItems:2.7.69-GTNH:dev")
+    // Optional: when ServerUtilities is installed, its teams share quest progress.
+    compileOnly("com.github.GTNewHorizons:ServerUtilities:2.4.21:dev") { transitive = false }
 }

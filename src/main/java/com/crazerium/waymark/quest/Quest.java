@@ -303,6 +303,7 @@ public class Quest extends QuestObject {
                 "type",
                 reward.getType()
                     .getId());
+            if (reward.isTeamReward()) r.addProperty("team_reward", true);
             reward.writeJson(r);
             rewardArray.add(r);
         }
@@ -389,6 +390,7 @@ public class Quest extends QuestObject {
                 Waymark.LOG.warn("{}: unknown reward type '{}', it is kept but does nothing", this, typeId);
                 reward = new UnknownReward(this, id);
             }
+            reward.setTeamReward(JsonUtil.getBoolean(r, "team_reward", false));
             rewards.add(reward);
             getBook().register(reward);
             reward.readJson(r);

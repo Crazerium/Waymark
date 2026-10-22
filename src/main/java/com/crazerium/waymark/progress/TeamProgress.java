@@ -125,14 +125,37 @@ public class TeamProgress {
         return !isCompleted(quest) && isUnlocked(quest);
     }
 
+    /** Claims of team rewards are stored under this key instead of a player, so one claim counts for everyone. */
+    private static final UUID WHOLE_TEAM = new UUID(0, 0);
+
+    private static UUID claimKey(UUID player, Reward reward) {
+        return reward.isTeamReward() ? WHOLE_TEAM : player;
+    }
+
+    /** For a team reward: claimed by anyone in the team. Otherwise: claimed by this player. */
     public boolean isClaimed(UUID player, Reward reward) {
-        Set<Long> set = claimed.get(player);
+        Set<Long> set = claimed.get(claimKey(player, reward));
         return set != null && set.contains(reward.getId());
     }
 
-    public void setClaimed(UUID player, long rewardId) {
-        claimed.computeIfAbsent(player, k -> new HashSet<>())
-            .add(rewardId);
+    public void setClaimed(UUID player, Reward reward) {
+        claimed.computeIfAbsent(claimKey(player, reward), k -> new HashSet<>())
+            .add(reward.getId());
+        dirty = true;
+    }
+
+    /**
+     * Adds another team's progress to this one, keeping whatever is further along: used when a player joins, leaves
+     * or switches team, so nobody loses quests.
+     */
+    public void mergeFrom(TeamProgress other) {
+        for (Map.Entry<Long, Long> e : other.taskProgress.entrySet())
+            taskProgress.merge(e.getKey(), e.getValue(), Math::max);
+        for (Map.Entry<Long, Long> e : other.completed.entrySet()) completed.merge(e.getKey(), e.getValue(), Math::min);
+        for (Map.Entry<Long, Integer> e : other.times.entrySet()) times.merge(e.getKey(), e.getValue(), Math::max);
+        for (Map.Entry<UUID, Set<Long>> e : other.claimed.entrySet())
+            claimed.computeIfAbsent(e.getKey(), k -> new HashSet<>())
+                .addAll(e.getValue());
         dirty = true;
     }
 

@@ -132,3 +132,5 @@ waymark.task.fluid=%s mB of %s
 waymark.task_type.fluid=Fluid
 waymark.field.fluid=Fluid
 waymark.edit.fluid_from_container=Take the fluid from a container in your inventory
+waymark.gui.team_reward=Team reward: one claim for the whole team
+waymark.field.team_reward=Team reward

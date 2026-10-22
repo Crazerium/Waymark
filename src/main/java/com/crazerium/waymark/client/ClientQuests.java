@@ -13,6 +13,7 @@ import com.crazerium.waymark.progress.TeamProgress;
 import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
+import com.crazerium.waymark.quest.QuestObject;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
 import com.google.gson.JsonObject;
@@ -91,7 +92,9 @@ public final class ClientQuests {
     }
 
     public static void onRewardClaimed(long rewardId) {
-        if (progress != null) progress.setClaimed(playerId(), rewardId);
+        if (progress == null || book == null) return;
+        QuestObject object = book.get(rewardId);
+        if (object instanceof Reward) progress.setClaimed(playerId(), (Reward) object);
     }
 
     public static void submit(Task task) {

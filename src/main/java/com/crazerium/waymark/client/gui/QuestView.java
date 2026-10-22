@@ -279,6 +279,7 @@ class QuestView {
             if (hover) {
                 List<String> lines = new ArrayList<>();
                 lines.add(reward.getTitle());
+                if (reward.isTeamReward()) lines.add("§d" + I18n.format("waymark.gui.team_reward"));
                 if (claimed) lines.add("§a" + I18n.format("waymark.gui.claimed"));
                 else if (claimable) lines.add("§e" + I18n.format("waymark.gui.click_claim"));
                 if (editing) lines.add("§8" + I18n.format("waymark.edit.right_click_edit"));

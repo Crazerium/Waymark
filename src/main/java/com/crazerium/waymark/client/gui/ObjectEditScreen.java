@@ -101,6 +101,7 @@ public class ObjectEditScreen extends GuiScreen {
             TaskType<?> t = TaskType.get(type);
             if (t != null) fields.addAll(t.editorFields());
         } else {
+            fields.add(EditorField.bool("team_reward", false));
             RewardType<?> r = RewardType.get(type);
             if (r != null) fields.addAll(r.editorFields());
         }

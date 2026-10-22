@@ -132,3 +132,5 @@ waymark.task.fluid=%s mB: %s
 waymark.task_type.fluid=Жидкость
 waymark.field.fluid=Жидкость
 waymark.edit.fluid_from_container=Взять жидкость из контейнера в инвентаре
+waymark.gui.team_reward=Командная награда: забирается одна на всю команду
+waymark.field.team_reward=Командная награда

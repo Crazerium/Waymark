@@ -12,6 +12,7 @@ import com.google.gson.JsonObject;
 public abstract class Reward extends QuestObject {
 
     private final Quest quest;
+    private boolean teamReward;
 
     protected Reward(Quest quest, long id) {
         super(id);
@@ -28,6 +29,15 @@ public abstract class Reward extends QuestObject {
     }
 
     public abstract RewardType<?> getType();
+
+    /** A team reward is claimed once for the whole team; a normal one by every member for themselves. */
+    public boolean isTeamReward() {
+        return teamReward;
+    }
+
+    public void setTeamReward(boolean teamReward) {
+        this.teamReward = teamReward;
+    }
 
     /** Short text shown in the quest window, e.g. "50 XP". */
     public abstract String getTitle();

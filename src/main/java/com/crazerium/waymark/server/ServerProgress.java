@@ -63,6 +63,7 @@ public final class ServerProgress {
         storage = null;
         teams.clear();
         autoDetectedTasks.clear();
+        lastTeam.clear();
     }
 
     public static void onBookLoaded(QuestBook book) {
@@ -80,13 +81,38 @@ public final class ServerProgress {
         }
     }
 
-    /** Teams are not implemented yet, so every player is their own team. */
     private static UUID teamIdOf(UUID player) {
-        return player;
+        return Teams.teamOf(player);
     }
 
     public static TeamProgress get(EntityPlayer player) {
         return teams.computeIfAbsent(teamIdOf(player.getUniqueID()), TeamProgress::new);
+    }
+
+    /**
+     * The team each player was in when last checked this session, to notice joins and leaves (including being
+     * removed from a team while offline).
+     */
+    private static final Map<UUID, UUID> lastTeam = new HashMap<>();
+
+    /**
+     * Notices that a player joined, left or switched team. Their old progress is merged into the new team's, so
+     * joining a team never loses quests and leaving keeps what the team did. Then the player and their new team get
+     * the merged progress.
+     */
+    private static void checkTeamChange(EntityPlayerMP player) {
+        UUID now = teamIdOf(player.getUniqueID());
+        UUID before = lastTeam.put(player.getUniqueID(), now);
+        if (before == null || before.equals(now)) return;
+        TeamProgress from = teams.get(before);
+        TeamProgress to = teams.computeIfAbsent(now, TeamProgress::new);
+        if (from != null) to.mergeFrom(from);
+        for (EntityPlayerMP member : onlineMembers(to)) sendProgress(member, to);
+    }
+
+    private static void sendProgress(EntityPlayerMP player, TeamProgress team) {
+        for (MessageBlob part : MessageBlob.split(MessageBlob.PROGRESS, team.toJson()))
+            WaymarkNetwork.CHANNEL.sendTo(part, player);
     }
 
     public static Collection<TeamProgress> all() {
@@ -113,9 +139,9 @@ public final class ServerProgress {
         for (MessageBlob part : MessageBlob.split(MessageBlob.BOOK, ServerQuests.syncData()))
             WaymarkNetwork.CHANNEL.sendTo(part, player);
         WaymarkNetwork.CHANNEL.sendTo(new MessageCanEdit(ServerEditor.canEdit(player)), player);
+        checkTeamChange(player);
         TeamProgress team = get(player);
-        for (MessageBlob part : MessageBlob.split(MessageBlob.PROGRESS, team.toJson()))
-            WaymarkNetwork.CHANNEL.sendTo(part, player);
+        sendProgress(player, team);
         for (Quest quest : book.getAllQuests()) checkQuest(team, quest);
     }
 
@@ -124,6 +150,7 @@ public final class ServerProgress {
     }
 
     public static void detect(EntityPlayerMP player) {
+        checkTeamChange(player);
         TeamProgress team = get(player);
         checkRepeats(team, player);
         for (Task task : autoDetectedTasks) {
@@ -190,9 +217,11 @@ public final class ServerProgress {
             .size())) return;
         TeamProgress team = get(player);
         if (!team.isCompleted(reward.getQuest()) || team.isClaimed(player.getUniqueID(), reward)) return;
-        team.setClaimed(player.getUniqueID(), reward.getId());
+        team.setClaimed(player.getUniqueID(), reward);
         reward.claim(player, choice);
-        WaymarkNetwork.CHANNEL.sendTo(new MessageRewardClaimed(reward.getId()), player);
+        // A team reward is gone for everyone once one member takes it.
+        if (reward.isTeamReward()) sendToTeam(team, new MessageRewardClaimed(reward.getId()));
+        else WaymarkNetwork.CHANNEL.sendTo(new MessageRewardClaimed(reward.getId()), player);
     }
 
     /** Completes a quest regardless of its dependencies, filling all of its tasks. */
