@@ -82,6 +82,20 @@ public class Chapter extends QuestObject {
         links.remove(link);
     }
 
+    /** Creates a quest with a given id; used when applying edits that the server already assigned an id to. */
+    Quest createQuest(long id, double x, double y) {
+        Quest quest = new Quest(this, id);
+        quest.setPosition(x, y);
+        quests.add(quest);
+        book.register(quest);
+        return quest;
+    }
+
+    /** Removes every link to the given quest. Returns true if there was one. */
+    boolean removeLinksTo(long questId) {
+        return links.removeIf(link -> link.getQuestId() == questId);
+    }
+
     public Quest createQuest(double x, double y) {
         Quest quest = new Quest(this, book.newId());
         quest.setPosition(x, y);

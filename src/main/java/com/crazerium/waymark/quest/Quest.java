@@ -179,6 +179,12 @@ public class Quest extends QuestObject {
         if (quest != this && !dependencies.contains(quest.getId())) dependencies.add(quest.getId());
     }
 
+    /** Removes a dependency by id, also one that points at a deleted quest. Returns true if it was there. */
+    boolean removeDependencyId(long id) {
+        hiddenLines.remove(id);
+        return dependencies.remove(Long.valueOf(id));
+    }
+
     public void removeDependency(Quest quest) {
         dependencies.remove(quest.getId());
         hiddenLines.remove(quest.getId());

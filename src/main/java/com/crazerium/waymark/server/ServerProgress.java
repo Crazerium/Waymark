@@ -19,6 +19,7 @@ import net.minecraft.util.EnumChatFormatting;
 
 import com.crazerium.waymark.io.ProgressStorage;
 import com.crazerium.waymark.network.MessageBlob;
+import com.crazerium.waymark.network.MessageCanEdit;
 import com.crazerium.waymark.network.MessageQuestCompleted;
 import com.crazerium.waymark.network.MessageRewardClaimed;
 import com.crazerium.waymark.network.MessageTaskProgress;
@@ -107,6 +108,7 @@ public final class ServerProgress {
         QuestBook book = ServerQuests.get();
         for (MessageBlob part : MessageBlob.split(MessageBlob.BOOK, ServerQuests.syncData()))
             WaymarkNetwork.CHANNEL.sendTo(part, player);
+        WaymarkNetwork.CHANNEL.sendTo(new MessageCanEdit(ServerEditor.canEdit(player)), player);
         TeamProgress team = get(player);
         for (MessageBlob part : MessageBlob.split(MessageBlob.PROGRESS, team.toJson()))
             WaymarkNetwork.CHANNEL.sendTo(part, player);
@@ -212,7 +214,7 @@ public final class ServerProgress {
             }
         }
 
-        // Quests without tasks complete as soon as they unlock, so completion can cascade.
+        // Quests whose tasks are all optional complete as soon as they unlock, so completion can cascade.
         for (Quest dependent : quest.getBook()
             .getDependents(quest)) checkQuest(team, dependent);
     }

@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -94,6 +95,21 @@ public class QuestBookStorage {
                 .size(),
             book.getObjectCount());
         return book;
+    }
+
+    /** Writes only the given chapters (and the chapter order), for small edits to a large book. */
+    public void saveChapters(QuestBook book, Collection<Chapter> chapters) throws IOException {
+        Files.createDirectories(chaptersDir.toPath());
+        for (Chapter chapter : chapters) {
+            writeJson(new File(chaptersDir, chapter.getFilename() + ".json"), chapter.toJson());
+            loadedFiles.add(chapter.getFilename());
+        }
+        List<String> order = new ArrayList<>();
+        for (Chapter chapter : book.getChapters()) order.add(chapter.getFilename());
+        JsonObject json = new JsonObject();
+        json.addProperty("version", FORMAT_VERSION);
+        json.add("chapters", JsonUtil.toArray(order));
+        writeJson(bookFile, json);
     }
 
     public void save(QuestBook book) throws IOException {

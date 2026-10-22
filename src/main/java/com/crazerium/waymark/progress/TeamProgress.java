@@ -76,8 +76,13 @@ public class TeamProgress {
             .test(met, deps.size());
     }
 
-    /** True if enough non-optional tasks are done for the quest's task mode. A quest with none is done at once. */
+    /**
+     * True if enough non-optional tasks are done for the quest's task mode. A quest whose tasks are all optional is
+     * done at once; a quest with no tasks at all never is (it can only be completed by a reward or a command).
+     */
     public boolean areTasksDone(Quest quest) {
+        if (quest.getTasks()
+            .isEmpty()) return false;
         int total = 0, met = 0;
         for (Task task : quest.getTasks()) {
             if (task.isOptional()) continue;

@@ -2,9 +2,12 @@ package com.crazerium.waymark.server;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.Collection;
 
+import com.crazerium.waymark.Waymark;
 import com.crazerium.waymark.io.QuestBookStorage;
 import com.crazerium.waymark.network.BookSync;
+import com.crazerium.waymark.quest.Chapter;
 import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.util.Compression;
 
@@ -37,6 +40,17 @@ public final class ServerQuests {
             BookSync.write(book)
                 .toString());
         return syncData;
+    }
+
+    /** Saves the chapters an edit changed and refreshes everything derived from the book. */
+    public static void onEdited(Collection<Chapter> changed) {
+        syncData = null;
+        ServerProgress.onBookLoaded(book);
+        try {
+            storage.saveChapters(book, changed);
+        } catch (IOException e) {
+            Waymark.LOG.error("Failed to save edited quests", e);
+        }
     }
 
     public static void save() throws IOException {

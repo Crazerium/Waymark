@@ -4,10 +4,13 @@ import java.util.UUID;
 
 import net.minecraft.client.Minecraft;
 
+import com.crazerium.waymark.Waymark;
 import com.crazerium.waymark.network.MessageClaimReward;
+import com.crazerium.waymark.network.MessageEditRequest;
 import com.crazerium.waymark.network.MessageSubmitTask;
 import com.crazerium.waymark.network.WaymarkNetwork;
 import com.crazerium.waymark.progress.TeamProgress;
+import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.QuestBook;
 import com.crazerium.waymark.quest.Reward;
 import com.crazerium.waymark.quest.Task;
@@ -22,8 +25,31 @@ public final class ClientQuests {
 
     private static QuestBook book;
     private static TeamProgress progress;
+    private static boolean canEdit;
 
     private ClientQuests() {}
+
+    public static boolean canEdit() {
+        return canEdit;
+    }
+
+    public static void setCanEdit(boolean value) {
+        canEdit = value;
+    }
+
+    /** Asks the server to make an editor change; if accepted it comes back through {@link #applyEdit}. */
+    public static void sendEdit(JsonObject op) {
+        WaymarkNetwork.CHANNEL.sendToServer(new MessageEditRequest(op));
+    }
+
+    public static void applyEdit(JsonObject op) {
+        if (book == null) return;
+        try {
+            BookEdits.apply(book, op);
+        } catch (IllegalArgumentException e) {
+            Waymark.LOG.warn("Could not apply quest edit {}: {}", op, e.getMessage());
+        }
+    }
 
     /** Null until the server has sent the book. */
     public static QuestBook getBook() {
@@ -72,5 +98,6 @@ public final class ClientQuests {
     public static void clear() {
         book = null;
         progress = null;
+        canEdit = false;
     }
 }

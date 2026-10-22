@@ -20,6 +20,7 @@ import org.lwjgl.opengl.GL11;
 import com.crazerium.waymark.client.ClientEvents;
 import com.crazerium.waymark.client.ClientQuests;
 import com.crazerium.waymark.client.QuestState;
+import com.crazerium.waymark.quest.BookEdits;
 import com.crazerium.waymark.quest.Chapter;
 import com.crazerium.waymark.quest.Quest;
 import com.crazerium.waymark.quest.QuestBook;
@@ -52,8 +53,23 @@ public class QuestBookScreen extends GuiScreen {
     private int listScroll;
     private QuestView questView;
 
-    private boolean dragging, dragMoved;
+    /** What a held left mouse button on the map is doing. */
+    private enum Drag {
+        NONE,
+        PAN,
+        /** Edit mode: moving a quest or link. */
+        MOVE,
+        /** Edit mode: Ctrl+drag from a quest to another to toggle a dependency. */
+        CONNECT
+    }
+
+    private static boolean editMode;
+    private Drag drag = Drag.NONE;
+    private boolean dragMoved;
+    private Node dragNode;
     private int dragStartX, dragStartY, lastMouseX, lastMouseY;
+    private ContextMenu menu;
+    private int editButtonX, editButtonW;
 
     private List<String> tooltip;
     private ItemStack tooltipStack;
@@ -149,33 +165,61 @@ public class QuestBookScreen extends GuiScreen {
         final Quest quest;
         final double x, y, size;
         final boolean link;
+        /** Index in the chapter's link list, or -1 for a quest. */
+        final int linkIndex;
         final QuestState state;
 
-        Node(Quest quest, double x, double y, double size, boolean link) {
+        Node(Quest quest, double x, double y, double size, int linkIndex) {
             this.quest = quest;
             this.x = x;
             this.y = y;
             this.size = size;
-            this.link = link;
+            this.link = linkIndex >= 0;
+            this.linkIndex = linkIndex;
             this.state = QuestState.of(quest);
+        }
+
+        boolean sameAs(Node other) {
+            return other != null && other.quest == quest && other.linkIndex == linkIndex;
         }
     }
 
-    /** Visible nodes of the open chapter, quests first and links after. */
+    /**
+     * Visible nodes of the open chapter, quests first and links after. In edit mode hidden quests are included too,
+     * and the node being dragged is placed under the mouse.
+     */
     private List<Node> nodes() {
         List<Node> nodes = new ArrayList<>();
         if (chapter == null) return nodes;
-        for (Quest q : chapter.getQuests()) {
-            Node node = new Node(q, q.getX(), q.getY(), q.getSize(), false);
-            if (node.state != QuestState.HIDDEN) nodes.add(node);
-        }
-        for (QuestLink link : chapter.getLinks()) {
+        for (Quest q : chapter.getQuests()) addNode(nodes, new Node(q, q.getX(), q.getY(), q.getSize(), -1));
+        List<QuestLink> links = chapter.getLinks();
+        for (int i = 0; i < links.size(); i++) {
+            QuestLink link = links.get(i);
             Quest q = link.getQuest();
-            if (q == null) continue;
-            Node node = new Node(q, link.getX(), link.getY(), link.getSize(), true);
-            if (node.state != QuestState.HIDDEN) nodes.add(node);
+            if (q != null) addNode(nodes, new Node(q, link.getX(), link.getY(), link.getSize(), i));
         }
         return nodes;
+    }
+
+    private void addNode(List<Node> nodes, Node node) {
+        if (node.state == QuestState.HIDDEN && !editMode) return;
+        if (drag == Drag.MOVE && dragMoved && node.sameAs(dragNode))
+            node = new Node(node.quest, snap(worldX(lastMouseX)), snap(worldY(lastMouseY)), node.size, node.linkIndex);
+        nodes.add(node);
+    }
+
+    private double worldX(int mx) {
+        return (mx - canvasX - canvasW / 2.0 - panX) / (GRID * zoom);
+    }
+
+    private double worldY(int my) {
+        return (my - canvasY - canvasH / 2.0 - panY) / (GRID * zoom);
+    }
+
+    /** Positions snap to half a grid cell; holding Shift places freely. */
+    private static double snap(double v) {
+        if (isShiftKeyDown()) return Math.round(v * 100) / 100.0;
+        return Math.round(v * 2) / 2.0;
     }
 
     private void centerView() {
@@ -235,16 +279,25 @@ public class QuestBookScreen extends GuiScreen {
             return;
         }
         refresh(book);
+        // An edit from the server (maybe another operator's) may have deleted the open quest.
+        if (questView != null && book.getQuest(questView.quest.getId()) != questView.quest) questView = null;
+        if (!ClientQuests.canEdit()) editMode = false;
 
-        // While the quest window is open the map behind it must not react to the mouse.
-        int hx = questView == null ? mx : -1;
-        int hy = questView == null ? my : -1;
+        // While the quest window or a menu is open the map behind it must not react to the mouse.
+        boolean blocked = questView != null || menu != null;
+        int hx = blocked ? -1 : mx;
+        int hy = blocked ? -1 : my;
+        drawEditHeader(hx, hy);
         drawChapterList(book, hx, hy);
         drawCanvas(hx, hy);
 
         if (questView != null) {
             GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
             questView.draw(mx, my);
+        }
+        if (menu != null) {
+            GL11.glClear(GL11.GL_DEPTH_BUFFER_BIT);
+            menu.draw(fontRendererObj, mx, my);
         }
 
         super.drawScreen(mx, my, partialTicks);
@@ -254,6 +307,19 @@ public class QuestBookScreen extends GuiScreen {
         GL11.glDisable(GL11.GL_LIGHTING);
         GL11.glDisable(GL11.GL_DEPTH_TEST);
         RenderHelper.disableStandardItemLighting();
+    }
+
+    /** The edit mode toggle (operators only) and, while editing, a line of help. */
+    private void drawEditHeader(int mx, int my) {
+        if (!ClientQuests.canEdit()) return;
+        String label = I18n.format(editMode ? "waymark.edit.on" : "waymark.edit.off");
+        editButtonW = fontRendererObj.getStringWidth(label) + 12;
+        editButtonX = width - MARGIN - editButtonW;
+        GuiUtil.button(fontRendererObj, editButtonX, MARGIN, editButtonW, 14, label, mx, my);
+        if (editMode) {
+            String help = GuiUtil.trim(fontRendererObj, I18n.format("waymark.edit.help"), editButtonX - canvasX - 8);
+            fontRendererObj.drawString(help, canvasX, MARGIN + 4, 0xFFCC66);
+        }
     }
 
     private void drawChapterList(QuestBook book, int mx, int my) {
@@ -361,7 +427,9 @@ public class QuestBookScreen extends GuiScreen {
                 || cy + half < canvasY
                 || cy - half > canvasY + canvasH) continue;
 
-            int border = state.color;
+            // Hidden quests only show in edit mode; purple marks them as invisible to players.
+            int border = state == QuestState.HIDDEN ? 0xFF9050C0 : state.color;
+            if (n.sameAs(dragNode) && drag != Drag.NONE) border = 0xFFFFFFFF;
             if (state == QuestState.CLAIMABLE) {
                 // Pulse so finished quests with unclaimed rewards stand out.
                 float pulse = (float) (0.6 + 0.4 * Math.sin(System.currentTimeMillis() / 200.0));
@@ -381,7 +449,7 @@ public class QuestBookScreen extends GuiScreen {
                 drawCenteredString(fontRendererObj, "?", cx, cy - 4, 0xFFFFFF);
             }
 
-            if (state == QuestState.LOCKED)
+            if (state == QuestState.LOCKED || state == QuestState.HIDDEN)
                 GuiUtil.rect(cx - half + 1, cy - half + 1, half * 2 - 2, half * 2 - 2, 0xA0000000);
             if (state == QuestState.IN_PROGRESS) {
                 int barW = (int) ((half * 2 - 2) * QuestState.fraction(q));
@@ -389,6 +457,9 @@ public class QuestBookScreen extends GuiScreen {
             }
             // A link is marked with a small corner so players know the quest lives in another chapter.
             if (n.link) GuiUtil.rect(cx + half - 5, cy - half + 1, 4, 4, 0xFF55AAFF);
+        }
+        if (drag == Drag.CONNECT && dragNode != null) {
+            GuiUtil.line(screenX(dragNode), screenY(dragNode), lastMouseX, lastMouseY, lineWidth, 0xFFFFCC00);
         }
         GuiUtil.endScissor();
 
@@ -430,8 +501,18 @@ public class QuestBookScreen extends GuiScreen {
     protected void mouseClicked(int mx, int my, int button) {
         super.mouseClicked(mx, my, button);
         if (ClientQuests.getBook() == null) return;
+        if (menu != null) {
+            if (!menu.mouseClicked(mx, my)) menu = null;
+            else playClick();
+            return;
+        }
         if (questView != null) {
             questView.mouseClicked(mx, my, button);
+            return;
+        }
+        if (ClientQuests.canEdit() && GuiUtil.inside(mx, my, editButtonX, MARGIN, editButtonW, 14)) {
+            editMode = !editMode;
+            playClick();
             return;
         }
         if (GuiUtil.inside(mx, my, listX, listY, LIST_WIDTH, listH)) {
@@ -444,19 +525,28 @@ public class QuestBookScreen extends GuiScreen {
             }
             return;
         }
-        if (GuiUtil.inside(mx, my, canvasX, canvasY, canvasW, canvasH)) {
-            dragging = true;
-            dragMoved = false;
-            dragStartX = lastMouseX = mx;
-            dragStartY = lastMouseY = my;
+        if (chapter == null || !GuiUtil.inside(mx, my, canvasX, canvasY, canvasW, canvasH)) return;
+        Node node = nodeAt(nodes(), mx, my);
+        if (button == 1 && editMode) {
+            openEditMenu(node, mx, my);
+            return;
         }
+        if (button != 0) return;
+        if (editMode && node != null) drag = isCtrlKeyDown() ? Drag.CONNECT : Drag.MOVE;
+        else drag = Drag.PAN;
+        dragNode = node;
+        dragMoved = false;
+        dragStartX = lastMouseX = mx;
+        dragStartY = lastMouseY = my;
     }
 
     @Override
     protected void mouseClickMove(int mx, int my, int button, long timeSinceClick) {
-        if (!dragging) return;
-        panX += mx - lastMouseX;
-        panY += my - lastMouseY;
+        if (drag == Drag.NONE) return;
+        if (drag == Drag.PAN) {
+            panX += mx - lastMouseX;
+            panY += my - lastMouseY;
+        }
         lastMouseX = mx;
         lastMouseY = my;
         if (Math.abs(mx - dragStartX) + Math.abs(my - dragStartY) > 3) dragMoved = true;
@@ -465,14 +555,51 @@ public class QuestBookScreen extends GuiScreen {
     @Override
     protected void mouseMovedOrUp(int mx, int my, int which) {
         super.mouseMovedOrUp(mx, my, which);
-        if (which == -1 || !dragging) return;
-        dragging = false;
-        if (!dragMoved && which == 0) {
+        if (which != 0 || drag == Drag.NONE) return;
+        Drag finished = drag;
+        Node from = dragNode;
+        drag = Drag.NONE;
+        dragNode = null;
+
+        if (!dragMoved) {
+            // A click without dragging opens the quest, in edit mode too.
             Quest quest = questAt(mx, my);
             if (quest != null) {
                 openQuest(quest);
                 playClick();
             }
+            return;
+        }
+        if (finished == Drag.MOVE) {
+            double x = snap(worldX(mx)), y = snap(worldY(my));
+            ClientQuests.sendEdit(
+                from.link ? BookEdits.moveLink(chapter, from.linkIndex, x, y) : BookEdits.moveQuest(from.quest, x, y));
+        } else if (finished == Drag.CONNECT) {
+            Node to = nodeAt(nodes(), mx, my);
+            // Dragging from A to B makes B require A (or removes that requirement).
+            if (to != null && to.quest != from.quest)
+                ClientQuests.sendEdit(BookEdits.toggleDependency(to.quest, from.quest));
+        }
+    }
+
+    private void openEditMenu(Node node, int mx, int my) {
+        menu = new ContextMenu(mx, my);
+        if (node == null) {
+            double x = snap(worldX(mx)), y = snap(worldY(my));
+            menu.add(
+                I18n.format("waymark.edit.new_quest"),
+                () -> ClientQuests.sendEdit(BookEdits.createQuest(chapter, x, y)));
+        } else if (node.link) {
+            int index = node.linkIndex;
+            menu.add(
+                I18n.format("waymark.edit.remove_link"),
+                () -> ClientQuests.sendEdit(BookEdits.deleteLink(chapter, index)));
+        } else {
+            Quest quest = node.quest;
+            menu.addDangerous(
+                I18n.format("waymark.edit.delete_quest"),
+                I18n.format("waymark.edit.confirm"),
+                () -> ClientQuests.sendEdit(BookEdits.deleteQuest(quest)));
         }
     }
 
@@ -506,6 +633,10 @@ public class QuestBookScreen extends GuiScreen {
 
     @Override
     protected void keyTyped(char c, int key) {
+        if (key == Keyboard.KEY_ESCAPE && menu != null) {
+            menu = null;
+            return;
+        }
         if (key == Keyboard.KEY_ESCAPE && questView != null) {
             closeQuest();
             return;
